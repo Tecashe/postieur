@@ -2,7 +2,7 @@
 
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 
 export default function DashboardLayout({
   children,
@@ -26,7 +26,9 @@ export default function DashboardLayout({
         {/* Content */}
         <main className="flex-1 overflow-auto">
           <div className="container max-w-7xl mx-auto p-8">
-            {children}
+            <Suspense fallback={null}>
+              {children}
+            </Suspense>
           </div>
         </main>
       </div>

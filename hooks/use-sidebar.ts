@@ -1,20 +1,23 @@
 'use client'
 
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+
+const SIDEBAR_KEY = 'sidebar_collapsed'
 
 export function useSidebar() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const isCollapsed = searchParams.get('sidebar') === 'collapsed'
+  const [isCollapsed, setIsCollapsed] = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem(SIDEBAR_KEY)
+    if (stored === 'true') setIsCollapsed(true)
+  }, [])
 
   const toggle = () => {
-    const params = new URLSearchParams(searchParams)
-    if (isCollapsed) {
-      params.delete('sidebar')
-    } else {
-      params.set('sidebar', 'collapsed')
-    }
-    router.push(`?${params.toString()}`, { scroll: false })
+    setIsCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem(SIDEBAR_KEY, String(next))
+      return next
+    })
   }
 
   return { isCollapsed, toggle }

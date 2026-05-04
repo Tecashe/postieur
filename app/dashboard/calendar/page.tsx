@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Badge } from '@/components/ui/badge'
 import { ChevronLeft, ChevronRight, Plus, Grid3X3, Calendar as CalendarIcon } from 'lucide-react'
-import { MOCK_SCHEDULED_POSTS, PLATFORMS } from '@/lib/mock-data'
+import { MOCK_POSTS } from '@/lib/mock-data'
+import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'month' | 'week' | 'day'
@@ -24,9 +25,9 @@ export default function CalendarPage() {
 
   // Group posts by date
   const postsByDate = useMemo(() => {
-    const grouped: Record<string, typeof MOCK_SCHEDULED_POSTS> = {}
-    MOCK_SCHEDULED_POSTS.forEach(post => {
-      const date = new Date(post.scheduledFor).toDateString()
+    const grouped: Record<string, typeof MOCK_POSTS> = {}
+    MOCK_POSTS.forEach(post => {
+      const date = new Date(post.scheduledAt).toDateString()
       if (!grouped[date]) grouped[date] = []
       grouped[date].push(post)
     })
@@ -149,15 +150,18 @@ export default function CalendarPage() {
                       {day}
                     </div>
                     <div className="space-y-1 flex-1 overflow-hidden">
-                      {posts.slice(0, 2).map((post, i) => (
-                        <div 
-                          key={i}
-                          className="text-xs px-1.5 py-1 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200 truncate hover:bg-emerald-200 dark:hover:bg-emerald-900 transition-colors"
-                          title={post.content.substring(0, 50)}
-                        >
-                          {PLATFORMS[post.platform].label}
-                        </div>
-                      ))}
+                      {posts.slice(0, 2).map((post, i) => {
+                        const platform = post.platforms[0]
+                        return (
+                          <div 
+                            key={i}
+                            className="text-xs px-1.5 py-1 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200 truncate hover:bg-emerald-200 dark:hover:bg-emerald-900 transition-colors"
+                            title={post.content.substring(0, 50)}
+                          >
+                            {platform ? PLATFORMS[platform]?.name : ''}
+                          </div>
+                        )
+                      })}
                       {posts.length > 2 && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400 px-1.5 py-1">
                           +{posts.length - 2} more
@@ -185,9 +189,10 @@ export default function CalendarPage() {
               <Badge variant="outline" className="text-xs">Next 30 days</Badge>
             </div>
             <div className="space-y-3">
-              {MOCK_SCHEDULED_POSTS.slice(0, 5).map((post) => {
-                const Icon = PLATFORMS[post.platform].icon
-                const date = new Date(post.scheduledFor)
+              {MOCK_POSTS.filter(p => p.status === 'scheduled').slice(0, 5).map((post) => {
+                const platform = post.platforms[0]
+                const Icon = platform ? PLATFORMS[platform]?.icon : null
+                const date = new Date(post.scheduledAt)
                 const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                 
                 return (
@@ -195,7 +200,7 @@ export default function CalendarPage() {
                     key={post.id}
                     className="flex items-start gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors group cursor-pointer"
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0 text-zinc-600 dark:text-zinc-400 mt-0.5" />
+                    {Icon && <Icon className="w-5 h-5 flex-shrink-0 text-zinc-600 dark:text-zinc-400 mt-0.5" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-zinc-900 dark:text-white line-clamp-2">
                         {post.content}
@@ -224,13 +229,13 @@ export default function CalendarPage() {
               <div>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-1">Scheduled</p>
                 <p className="text-2xl font-light text-zinc-900 dark:text-white">
-                  {Object.values(postsByDate).flat().filter(p => p.status === 'scheduled').length}
+                  {MOCK_POSTS.filter(p => p.status === 'scheduled').length}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-1">Draft</p>
                 <p className="text-2xl font-light text-zinc-900 dark:text-white">
-                  {Object.values(postsByDate).flat().filter(p => p.status === 'draft').length}
+                  {MOCK_POSTS.filter(p => p.status === 'draft').length}
                 </p>
               </div>
               <div>
@@ -245,11 +250,11 @@ export default function CalendarPage() {
           <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
             <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">Platforms</h3>
             <div className="space-y-2">
-              {['Instagram', 'LinkedIn', 'Twitter', 'TikTok'].map(platform => (
+              {(['instagram', 'linkedin', 'x', 'tiktok'] as const).map(platform => (
                 <div key={platform} className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-600 dark:text-zinc-400">{platform}</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{PLATFORMS[platform].name}</span>
                   <span className="font-medium text-zinc-900 dark:text-white">
-                    {Object.values(postsByDate).flat().filter(p => p.platform === platform.toLowerCase() || p.platform.includes(platform.toLowerCase())).length}
+                    {MOCK_POSTS.filter(p => p.platforms.includes(platform)).length}
                   </span>
                 </div>
               ))}

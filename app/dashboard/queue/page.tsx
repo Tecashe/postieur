@@ -7,18 +7,19 @@ import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { GripVertical, Trash2, Eye, Send, Clock, Zap } from 'lucide-react'
-import { MOCK_SCHEDULED_POSTS, PLATFORMS } from '@/lib/mock-data'
+import { MOCK_POSTS } from '@/lib/mock-data'
+import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 export default function QueuePage() {
   const [sortBy, setSortBy] = useState<'date' | 'platform'>('date')
   const [selectedPosts, setSelectedPosts] = useState<string[]>([])
 
-  const scheduledPosts = MOCK_SCHEDULED_POSTS.filter(p => p.status === 'scheduled').slice(0, 10)
+  const scheduledPosts = MOCK_POSTS.filter(p => p.status === 'scheduled').slice(0, 10)
   
   const sortedPosts = sortBy === 'date' 
-    ? [...scheduledPosts].sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
-    : [...scheduledPosts].sort((a, b) => a.platform.localeCompare(b.platform))
+    ? [...scheduledPosts].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+    : [...scheduledPosts].sort((a, b) => (a.platforms[0] || '').localeCompare(b.platforms[0] || ''))
 
   const handleSelectPost = (postId: string) => {
     setSelectedPosts(prev =>
@@ -59,7 +60,7 @@ export default function QueuePage() {
           <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">This Week</p>
           <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">
             {scheduledPosts.filter(p => {
-              const date = new Date(p.scheduledFor)
+              const date = new Date(p.scheduledAt)
               const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
               return date <= weekFromNow
             }).length}
@@ -101,8 +102,9 @@ export default function QueuePage() {
       {/* Queue Items */}
       <div className="space-y-2">
         {sortedPosts.map((post) => {
-          const Icon = PLATFORMS[post.platform].icon
-          const scheduledDate = new Date(post.scheduledFor)
+          const platform = post.platforms[0]
+          const Icon = platform ? PLATFORMS[platform]?.icon : null
+          const scheduledDate = new Date(post.scheduledAt)
           const isToday = scheduledDate.toDateString() === new Date().toDateString()
           const isTomorrow = scheduledDate.toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString()
           
@@ -126,8 +128,8 @@ export default function QueuePage() {
                   <p className="text-sm font-medium text-zinc-900 dark:text-white line-clamp-2">{post.content}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <Badge className="flex items-center gap-1 text-xs">
-                      <Icon className="w-3 h-3" />
-                      {PLATFORMS[post.platform].label}
+                      {Icon && <Icon className="w-3 h-3" />}
+                      {platform ? PLATFORMS[platform]?.name : ''}
                     </Badge>
                     <span className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
                       <Clock className="w-3 h-3" />

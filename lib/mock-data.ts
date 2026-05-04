@@ -87,15 +87,15 @@ export const MOCK_CHANNELS: Channel[] = [
 ]
 
 const POST_CONTENT = [
-  'Excited to announce our new product launch! 🚀 Transforming how teams collaborate with AI-powered insights.',
+  'Excited to announce our new product launch! Transforming how teams collaborate with AI-powered insights.',
   'Behind the scenes: Meet the team that makes innovation happen. #TeamWork #Innovation',
   'Quick tip: Did you know you can save 2 hours per week with our automation? Try it today.',
   'Reading the latest industry report on digital transformation. Key insights for 2024 ahead.',
-  'Coffee and code: Building the future one commit at a time. ☕️💻',
+  'Coffee and code: Building the future one commit at a time.',
   'Celebrating 10 years of innovation with our amazing community. Thank you for being part of this journey!',
   'New feature alert: Real-time collaboration is now live. Start working together instantly.',
   'Grateful for the support from our partners and customers. This milestone is shared success.',
-  'Webinar coming soon: AI trends shaping the next decade. Mark your calendars! 📅',
+  'Webinar coming soon: AI trends shaping the next decade. Mark your calendars!',
   'Work-life balance matters. Our team is hiring for remote positions across the globe.',
   'Case study: How company X increased productivity by 40% in 3 months. Read the full story on our blog.',
   'Just released our annual report. Dive into the numbers that show our growth trajectory.',

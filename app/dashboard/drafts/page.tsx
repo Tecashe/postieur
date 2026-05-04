@@ -28,7 +28,7 @@ const DRAFTS = [
   },
   {
     id: '2',
-    content: 'Behind-the-scenes look at our team collaborating on the next big thing 🚀',
+    content: 'Behind-the-scenes look at our team collaborating on the next big thing',
     platforms: ['instagram', 'tiktok'] as string[],
     lastEdited: new Date(Date.now() - 8 * 60 * 60 * 1000),
     wordCount: 18,
@@ -64,7 +64,7 @@ const DRAFTS = [
   },
   {
     id: '6',
-    content: 'We\'re hiring! 👀 Looking for talented social media managers, content creators, and strategists. Check out our careers page for open positions!',
+    content: 'We\'re hiring! Looking for talented social media managers, content creators, and strategists. Check out our careers page for open positions!',
     platforms: ['x', 'linkedin', 'instagram'] as string[],
     lastEdited: new Date(Date.now() - 12 * 60 * 60 * 1000),
     wordCount: 32,

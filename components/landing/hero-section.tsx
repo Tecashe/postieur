@@ -1,10 +1,10 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, Variants } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, Sparkles } from 'lucide-react'
 
-const container = {
+const container: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -15,13 +15,13 @@ const container = {
   },
 }
 
-const item = {
+const item: Variants = {
   hidden: { opacity: 0, y: 20 },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      type: 'spring',
+      type: 'spring' as const,
       stiffness: 100,
       damping: 10,
     },
@@ -43,13 +43,6 @@ export function HeroSection() {
         animate="visible"
         className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center"
       >
-        {/* Badge */}
-        <motion.div variants={item} className="mb-6">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950">
-            <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-sm text-emerald-700 dark:text-emerald-300">Trusted by 10K+ creators</span>
-          </div>
-        </motion.div>
 
         {/* Main Headline */}
         <motion.h1 variants={item} className="text-5xl sm:text-6xl lg:text-7xl font-serif font-light leading-tight mb-6 text-zinc-900 dark:text-white">

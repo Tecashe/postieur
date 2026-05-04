@@ -139,27 +139,27 @@ export const SIDEBAR_SECTIONS = [
   {
     title: 'WORKSPACE',
     items: [
-      { label: 'Dashboard', href: '/' },
-      { label: 'Calendar', href: '/calendar' },
-      { label: 'Compose', href: '/compose' },
-      { label: 'Queue', href: '/queue' },
-      { label: 'Analytics', href: '/analytics' },
+      { label: 'Dashboard', href: '/', icon: 'LayoutDashboard' },
+      { label: 'Calendar', href: '/calendar', icon: 'CalendarDays' },
+      { label: 'Compose', href: '/compose', icon: 'PenSquare' },
+      { label: 'Queue', href: '/queue', icon: 'ListOrdered' },
+      { label: 'Analytics', href: '/analytics', icon: 'BarChart3' },
     ],
   },
   {
     title: 'LIBRARY',
     items: [
-      { label: 'Media Library', href: '/media' },
-      { label: 'Templates', href: '/templates' },
-      { label: 'Drafts', href: '/drafts' },
+      { label: 'Media Library', href: '/media', icon: 'Image' },
+      { label: 'Templates', href: '/templates', icon: 'LayoutTemplate' },
+      { label: 'Drafts', href: '/drafts', icon: 'FileEdit' },
     ],
   },
   {
     title: 'SETTINGS',
     items: [
-      { label: 'Channels', href: '/channels' },
-      { label: 'Members', href: '/members' },
-      { label: 'Settings', href: '/settings' },
+      { label: 'Channels', href: '/channels', icon: 'Radio' },
+      { label: 'Members', href: '/members', icon: 'Users' },
+      { label: 'Settings', href: '/settings', icon: 'Settings' },
     ],
   },
 ]

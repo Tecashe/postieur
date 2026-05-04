@@ -20,7 +20,7 @@ const DRAFTS = [
   {
     id: '1',
     content: 'Excited to announce our new feature launch! Check out what we\'ve been working on for the past 3 months...',
-    platforms: ['Twitter', 'LinkedIn'],
+    platforms: ['x', 'linkedin'] as string[],
     lastEdited: new Date(Date.now() - 2 * 60 * 60 * 1000),
     wordCount: 45,
     charCount: 280,
@@ -29,7 +29,7 @@ const DRAFTS = [
   {
     id: '2',
     content: 'Behind-the-scenes look at our team collaborating on the next big thing 🚀',
-    platforms: ['Instagram', 'TikTok'],
+    platforms: ['instagram', 'tiktok'] as string[],
     lastEdited: new Date(Date.now() - 8 * 60 * 60 * 1000),
     wordCount: 18,
     charCount: 95,
@@ -38,7 +38,7 @@ const DRAFTS = [
   {
     id: '3',
     content: 'Join us for a live AMA session tomorrow at 2 PM EST! We\'ll be discussing product strategy, roadmap, and answering your questions...',
-    platforms: ['LinkedIn', 'Twitter'],
+    platforms: ['linkedin', 'x'] as string[],
     lastEdited: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
     wordCount: 35,
     charCount: 198,
@@ -47,7 +47,7 @@ const DRAFTS = [
   {
     id: '4',
     content: 'Customer spotlight: How [Company] increased their productivity by 40% using our platform',
-    platforms: ['Instagram', 'LinkedIn'],
+    platforms: ['instagram', 'linkedin'] as string[],
     lastEdited: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
     wordCount: 20,
     charCount: 110,
@@ -56,7 +56,7 @@ const DRAFTS = [
   {
     id: '5',
     content: 'New blog post: "5 Ways to Optimize Your Social Media Strategy in 2024" - [Link]',
-    platforms: ['Twitter', 'LinkedIn', 'Facebook'],
+    platforms: ['x', 'linkedin', 'facebook'] as string[],
     lastEdited: new Date(Date.now() - 5 * 60 * 60 * 1000),
     wordCount: 22,
     charCount: 125,
@@ -65,7 +65,7 @@ const DRAFTS = [
   {
     id: '6',
     content: 'We\'re hiring! 👀 Looking for talented social media managers, content creators, and strategists. Check out our careers page for open positions!',
-    platforms: ['Twitter', 'LinkedIn', 'Instagram'],
+    platforms: ['x', 'linkedin', 'instagram'] as string[],
     lastEdited: new Date(Date.now() - 12 * 60 * 60 * 1000),
     wordCount: 32,
     charCount: 180,
@@ -174,9 +174,9 @@ export default function DraftsPage() {
       <div className="space-y-3">
         {sortedDrafts.map(draft => {
           const getCharLimit = () => {
-            if (draft.platforms.includes('Twitter')) return 280
-            if (draft.platforms.includes('TikTok')) return 2200
-            if (draft.platforms.includes('Instagram')) return 2200
+            if (draft.platforms.includes('x')) return 280
+            if (draft.platforms.includes('tiktok')) return 2200
+            if (draft.platforms.includes('instagram')) return 2200
             return 3000
           }
           const charLimit = getCharLimit()
@@ -234,11 +234,12 @@ export default function DraftsPage() {
                       )}
                       <div className="flex gap-1">
                         {draft.platforms.map(platform => {
-                          const Icon = PLATFORMS[platform].icon
+                          const platformInfo = PLATFORMS[platform as keyof typeof PLATFORMS]
+                          const Icon = platformInfo?.icon
                           return (
                             <div key={platform} className="flex items-center gap-0.5 px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-xs text-zinc-700 dark:text-zinc-300">
-                              <Icon className="w-3 h-3" />
-                              <span>{platform}</span>
+                              {Icon && <Icon className="w-3 h-3" />}
+                              <span>{platformInfo?.name || platform}</span>
                             </div>
                           )
                         })}

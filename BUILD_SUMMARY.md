@@ -1,7 +1,7 @@
 # Social Media Scheduling Dashboard - Build Summary
 
 ## Overview
-A production-grade SaaS social media scheduling platform built with Next.js 16, featuring a refined monochrome editorial aesthetic with emerald accents. The application provides comprehensive tools for scheduling, managing, and analyzing social media content across 8 major platforms.
+A production-grade SaaS  social media scheduling platform built with Next.js 16, featuring a refined monochrome editorial aesthetic with emerald accents. The application provides comprehensive tools for scheduling, managing, and analyzing social media content across 8 major platforms.
 
 ## What's Included
 

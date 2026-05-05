@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useOrganization, useUser } from '@clerk/nextjs'
+import { inviteMember } from '@/app/actions/invite'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -75,12 +76,12 @@ export default function MembersPage() {
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
-    if (!organization || !inviteEmail.trim()) return
+    if (!inviteEmail.trim()) return
     setInviting(true)
     setInviteError(null)
     setInviteSuccess(false)
     try {
-      await organization.inviteMember({ emailAddress: inviteEmail.trim(), role: inviteRole })
+      await inviteMember(inviteEmail.trim(), inviteRole)
       setInviteEmail('')
       setInviteSuccess(true)
       invitations?.revalidate?.()
@@ -303,7 +304,7 @@ export default function MembersPage() {
                 </div>
                 {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
                 {inviteSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">Invitation sent!</p>}
-                <Button type="submit" className="w-full text-xs gap-1.5" disabled={!inviteEmail || inviting || !organization}>
+                <Button type="submit" className="w-full text-xs gap-1.5" disabled={!inviteEmail || inviting}>
                   <Mail className="w-3.5 h-3.5" />{inviting ? 'Sending…' : 'Send Invitation'}
                 </Button>
               </form>

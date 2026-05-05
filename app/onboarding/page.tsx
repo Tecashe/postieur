@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOrganizationList } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { createOrganization, setActive } = useOrganizationList()
+  const { createOrganization, setActive, userMemberships } = useOrganizationList({
+    userMemberships: { infinite: true },
+  })
   const [workspaceName, setWorkspaceName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Skip onboarding for users who already have an org (e.g. joined via invitation)
+  useEffect(() => {
+    if (userMemberships?.isLoading !== false) return
+    if ((userMemberships?.data?.length ?? 0) > 0) {
+      router.replace('/dashboard')
+    }
+  }, [userMemberships?.isLoading, userMemberships?.data?.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

@@ -1,11 +1,7 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
-
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
-const _instrumentSerif = Instrument_Serif({ weight: ["400"], subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: 'Postieur | Premium Social Scheduling',
@@ -32,8 +28,8 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'oklch(0.145 0 0)' },
+    { media: '(prefers-color-scheme: light)', color: 'oklch(0.972 0.010 78)' },
+    { media: '(prefers-color-scheme: dark)', color: 'oklch(0.128 0.014 48)' },
   ],
 }
 
@@ -43,10 +39,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="bg-background">
-      <body className="font-sans antialiased bg-background text-foreground">
-        {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased bg-background text-foreground">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange={false}
+        >
+          {children}
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </ThemeProvider>
       </body>
     </html>
   )

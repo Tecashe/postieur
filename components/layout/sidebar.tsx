@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useUser, useOrganizationList, useClerk } from '@clerk/nextjs'
+import { useUser, useOrganizationList, useClerk, useOrganization } from '@clerk/nextjs'
 import { useSidebar } from '@/hooks/use-sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -29,6 +29,8 @@ import {
   Sun,
   Moon,
   CircleDashed,
+  Check,
+  Building2,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -44,17 +46,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { theme, setTheme } = useTheme()
   const { user } = useUser()
   const { signOut } = useClerk()
-  const { userMemberships, setActive, createOrganization } = useOrganizationList({
+  const { userMemberships, setActive } = useOrganizationList({
     userMemberships: { infinite: true },
   })
+  const { organization: activeOrg } = useOrganization()
 
   const collapsed = !isMobile && isCollapsed
 
   const userInitials = user?.fullName
     ? user.fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.firstName?.[0]?.toUpperCase() ?? '?'
-
-  const activeOrg = userMemberships?.data?.find((m) => m.organization)?.organization
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -74,25 +75,50 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               <Image src="/apple-touch-icon.png" alt="Caelpost Logo" width={32} height={32} className="object-cover" />
             </div>
             {!collapsed && (
-              <div className="flex-1 flex items-center justify-between min-w-0">
-                <span className="font-serif font-normal text-foreground tracking-tight truncate text-base">Caelpost</span>
+              <div className="flex-1 min-w-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-muted rounded-sm ml-1">
-                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-                    </Button>
+                    <button className="w-full flex items-center justify-between gap-1 group outline-none">
+                      <div className="min-w-0">
+                        <p className="font-serif font-normal text-foreground tracking-tight truncate text-base leading-tight text-left">
+                          {activeOrg?.name ?? 'Caelpost'}
+                        </p>
+                        {activeOrg?.slug && (
+                          <p className="text-[10px] text-muted-foreground/60 truncate text-left leading-tight">
+                            {activeOrg.slug}
+                          </p>
+                        )}
+                      </div>
+                      <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 group-hover:text-foreground transition-colors" />
+                    </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    {userMemberships?.data?.map((membership) => (
-                      <DropdownMenuItem
-                        key={membership.organization.id}
-                        onClick={() => setActive?.({ organization: membership.organization })}
-                      >
-                        {membership.organization.name}
-                      </DropdownMenuItem>
-                    ))}
+                  <DropdownMenuContent align="start" className="w-56">
+                    <div className="px-2 py-1.5">
+                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Workspaces</p>
+                    </div>
+                    {userMemberships?.data?.map((membership) => {
+                      const isActiveOrg = membership.organization.id === activeOrg?.id
+                      return (
+                        <DropdownMenuItem
+                          key={membership.organization.id}
+                          onClick={() => setActive?.({ organization: membership.organization })}
+                          className="flex items-center gap-2"
+                        >
+                          <div className="w-5 h-5 rounded-sm bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Building2 className="w-3 h-3 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate">{membership.organization.name}</p>
+                            {membership.organization.slug && (
+                              <p className="text-[10px] text-muted-foreground truncate">{membership.organization.slug}</p>
+                            )}
+                          </div>
+                          {isActiveOrg && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
+                        </DropdownMenuItem>
+                      )
+                    })}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/onboarding')}>
+                    <DropdownMenuItem onClick={() => router.push('/onboarding')} className="text-muted-foreground">
                       + New Workspace
                     </DropdownMenuItem>
                   </DropdownMenuContent>

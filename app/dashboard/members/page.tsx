@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { useOrganization, useUser } from '@clerk/nextjs'
@@ -8,7 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  UserPlus, Search, Shield, Edit3, Eye, Crown, Trash2, Mail, Clock,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  UserPlus, Search, Shield, Edit3, Eye, Crown, Trash2, Mail, Clock, ChevronDown, Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +27,8 @@ const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
   'org:editor': { label: 'Editor', icon: Edit3,  color: 'text-foreground bg-muted' },
   'org:viewer': { label: 'Viewer', icon: Eye,    color: 'text-muted-foreground bg-muted/60' },
 }
+
+const ASSIGNABLE_ROLES: ClerkRole[] = ['org:admin', 'org:editor', 'org:viewer']
 
 const INVITE_ROLES: { value: ClerkRole; label: string; Icon: React.ElementType }[] = [
   { value: 'org:admin',  label: 'Admin',  Icon: Shield },
@@ -40,9 +49,15 @@ export default function MembersPage() {
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [inviteSuccess, setInviteSuccess] = useState(false)
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null)
 
   const members = memberships?.data ?? []
   const pendingInvites = invitations?.data ?? []
+
+  // Determine the current user's role in this org
+  const myMembership = members.find((m) => m.publicUserData?.userId === user?.id)
+  const myRole = myMembership?.role ?? 'org:viewer'
+  const canManageRoles = myRole === 'org:owner' || myRole === 'org:admin'
 
   const filtered = members.filter((m) => {
     if (!search) return true
@@ -79,6 +94,20 @@ export default function MembersPage() {
     }
   }
 
+  async function handleRoleChange(membershipId: string, newRole: ClerkRole) {
+    const membership = members.find((m) => m.id === membershipId)
+    if (!membership) return
+    setUpdatingRole(membershipId)
+    try {
+      await membership.update({ role: newRole })
+      memberships?.revalidate?.()
+    } catch (err) {
+      console.error('Failed to update role:', err)
+    } finally {
+      setUpdatingRole(null)
+    }
+  }
+
   async function handleRevoke(invitationId: string) {
     const invite = pendingInvites.find((i) => i.id === invitationId)
     if (invite) { try { await invite.revoke(); invitations?.revalidate?.() } catch {} }
@@ -91,6 +120,7 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-5 pb-6">
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {Object.entries(ROLE_CONFIG).map(([role, cfg]) => {
           const Icon = cfg.icon
@@ -108,6 +138,7 @@ export default function MembersPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
         <div className="space-y-4">
+          {/* Members table */}
           <Card className="bg-card border-border shadow-sm overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
               <div className="relative flex-1 max-w-xs">
@@ -116,6 +147,7 @@ export default function MembersPage() {
               </div>
               <p className="text-xs text-muted-foreground ml-auto">{members.length} member{members.length !== 1 ? 's' : ''}</p>
             </div>
+
             {memberships?.isLoading ? (
               <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading members…</div>
             ) : filtered.length === 0 ? (
@@ -125,31 +157,83 @@ export default function MembersPage() {
                 {filtered.map((membership) => {
                   const { publicUserData, role } = membership
                   const cfg = ROLE_CONFIG[role] ?? ROLE_CONFIG['org:viewer']
-                  const Icon = cfg.icon
+                  const RoleIcon = cfg.icon
                   const name = [publicUserData?.firstName, publicUserData?.lastName].filter(Boolean).join(' ') || 'User'
                   const email = publicUserData?.identifier ?? ''
                   const initials = name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
                   const isCurrentUser = publicUserData?.userId === user?.id
+                  const isOwner = role === 'org:owner'
+                  const canChangeThisRole = canManageRoles && !isCurrentUser && !isOwner
+                  const isUpdating = updatingRole === membership.id
+
                   return (
-                    <div key={membership.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/20 transition-colors">
+                    <div key={membership.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-muted/20 transition-colors">
+                      {/* Avatar */}
                       <div className="w-9 h-9 rounded-sm bg-primary/10 flex items-center justify-center text-xs font-medium text-primary flex-shrink-0 overflow-hidden">
                         {publicUserData?.imageUrl
                           ? <img src={publicUserData.imageUrl} alt={name} className="w-full h-full object-cover" />
                           : initials}
                       </div>
+
+                      {/* Name + email */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">
-                          {name}{isCurrentUser && <span className="ml-1 text-[10px] text-muted-foreground">(you)</span>}
+                          {name}
+                          {isCurrentUser && <span className="ml-1 text-[10px] text-muted-foreground">(you)</span>}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">{email}</p>
                       </div>
-                      <Badge className={cn('text-[10px] border-0 gap-1 flex-shrink-0', cfg.color)}>
-                        <Icon className="w-2.5 h-2.5" />{cfg.label}
-                      </Badge>
-                      {!isCurrentUser && role !== 'org:owner' && (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive flex-shrink-0" onClick={() => handleRemove(publicUserData?.userId ?? '')} title="Remove">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+
+                      {/* Role — clickable dropdown if can manage */}
+                      {canChangeThisRole ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              disabled={isUpdating}
+                              className={cn(
+                                'flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-medium border-0 transition-colors',
+                                cfg.color,
+                                'hover:opacity-80 disabled:opacity-50'
+                              )}
+                            >
+                              <RoleIcon className="w-2.5 h-2.5" />
+                              {isUpdating ? '…' : cfg.label}
+                              <ChevronDown className="w-2.5 h-2.5 ml-0.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-36">
+                            <div className="px-2 py-1">
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Change role</p>
+                            </div>
+                            {ASSIGNABLE_ROLES.map((r) => {
+                              const rcfg = ROLE_CONFIG[r]
+                              const RIcon = rcfg.icon
+                              return (
+                                <DropdownMenuItem
+                                  key={r}
+                                  onClick={() => handleRoleChange(membership.id, r)}
+                                  className="flex items-center gap-2 text-xs"
+                                >
+                                  <RIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                                  {rcfg.label}
+                                  {role === r && <Check className="w-3 h-3 ml-auto text-primary" />}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleRemove(publicUserData?.userId ?? '')}
+                              className="text-destructive focus:text-destructive focus:bg-destructive/10 text-xs"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-2" />
+                              Remove member
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <Badge className={cn('text-[10px] border-0 gap-1 flex-shrink-0', cfg.color)}>
+                          <RoleIcon className="w-2.5 h-2.5" />{cfg.label}
+                        </Badge>
                       )}
                     </div>
                   )
@@ -158,6 +242,7 @@ export default function MembersPage() {
             )}
           </Card>
 
+          {/* Pending invitations */}
           {pendingInvites.length > 0 && (
             <Card className="bg-card border-border shadow-sm overflow-hidden">
               <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
@@ -180,9 +265,11 @@ export default function MembersPage() {
                       <Badge className={cn('text-[10px] border-0 gap-1 flex-shrink-0', cfg.color)}>
                         <Icon className="w-2.5 h-2.5" />{cfg.label}
                       </Badge>
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive flex-shrink-0" onClick={() => handleRevoke(invite.id)}>
-                        Revoke
-                      </Button>
+                      {canManageRoles && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive flex-shrink-0" onClick={() => handleRevoke(invite.id)}>
+                          Revoke
+                        </Button>
+                      )}
                     </div>
                   )
                 })}
@@ -191,47 +278,68 @@ export default function MembersPage() {
           )}
         </div>
 
+        {/* Right panel */}
         <div className="space-y-4">
-          <Card className="bg-card border-border shadow-sm p-5">
-            <h3 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
-              <UserPlus className="w-4 h-4 text-muted-foreground" />Invite Team Member
-            </h3>
-            <form onSubmit={handleInvite} className="space-y-3">
-              <div>
-                <Label className="text-xs">Email Address</Label>
-                <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com" type="email" className="mt-1 h-8 text-xs bg-input border-border" required />
-              </div>
-              <div>
-                <Label className="text-xs">Role</Label>
-                <div className="grid grid-cols-2 gap-1.5 mt-1">
-                  {INVITE_ROLES.map(({ value, label, Icon }) => (
-                    <button key={value} type="button" onClick={() => setInviteRole(value)}
-                      className={cn('flex items-center gap-2 px-3 py-2 rounded-sm border text-xs transition-all text-left',
-                        inviteRole === value ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
-                      <Icon className="w-3.5 h-3.5" />{label}
-                    </button>
-                  ))}
+          {/* Invite form — only for admins/owners */}
+          {canManageRoles && (
+            <Card className="bg-card border-border shadow-sm p-5">
+              <h3 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-muted-foreground" />Invite Team Member
+              </h3>
+              <form onSubmit={handleInvite} className="space-y-3">
+                <div>
+                  <Label className="text-xs">Email Address</Label>
+                  <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com" type="email" className="mt-1 h-8 text-xs bg-input border-border" required />
                 </div>
-              </div>
-              {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
-              {inviteSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">Invitation sent!</p>}
-              <Button type="submit" className="w-full text-xs gap-1.5" disabled={!inviteEmail || inviting || !organization}>
-                <Mail className="w-3.5 h-3.5" />{inviting ? 'Sending…' : 'Send Invitation'}
-              </Button>
-            </form>
-          </Card>
-
-          <Card className="bg-card border-border shadow-sm p-5">
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">Role Permissions</h3>
-            <div className="space-y-2">
-              {([['Admin', 'Full access, manage team'], ['Editor', 'Create & schedule posts'], ['Viewer', 'View-only access']] as [string, string][]).map(([role, desc]) => (
-                <div key={role} className="flex gap-3 py-2 border-b border-border last:border-0">
-                  <div className="flex-1">
-                    <p className="text-xs font-medium text-foreground">{role}</p>
-                    <p className="text-[11px] text-muted-foreground">{desc}</p>
+                <div>
+                  <Label className="text-xs">Role</Label>
+                  <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    {INVITE_ROLES.map(({ value, label, Icon }) => (
+                      <button key={value} type="button" onClick={() => setInviteRole(value)}
+                        className={cn('flex items-center gap-2 px-3 py-2 rounded-sm border text-xs transition-all text-left',
+                          inviteRole === value ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
+                        <Icon className="w-3.5 h-3.5" />{label}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
+                {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
+                {inviteSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">Invitation sent!</p>}
+                <Button type="submit" className="w-full text-xs gap-1.5" disabled={!inviteEmail || inviting || !organization}>
+                  <Mail className="w-3.5 h-3.5" />{inviting ? 'Sending…' : 'Send Invitation'}
+                </Button>
+              </form>
+            </Card>
+          )}
+
+          {/* Role reference card */}
+          <Card className="bg-card border-border shadow-sm p-5">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">Role Permissions</h3>
+            <div className="space-y-0">
+              {([
+                ['org:owner',  'Owner',  'Full control, billing, delete workspace'],
+                ['org:admin',  'Admin',  'Manage members, all content access'],
+                ['org:editor', 'Editor', 'Create & schedule posts'],
+                ['org:viewer', 'Viewer', 'View-only access'],
+              ] as [string, string, string][]).map(([roleKey, label, desc]) => {
+                const cfg = ROLE_CONFIG[roleKey]
+                const Icon = cfg.icon
+                const isMyRole = roleKey === myRole
+                return (
+                  <div key={roleKey} className={cn('flex items-start gap-3 py-2.5 border-b border-border last:border-0', isMyRole && 'opacity-100')}>
+                    <div className={cn('w-5 h-5 rounded-sm flex items-center justify-center flex-shrink-0 mt-0.5', cfg.color)}>
+                      <Icon className="w-3 h-3" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-foreground">{label}</p>
+                        {isMyRole && <span className="text-[9px] bg-primary/10 text-primary px-1 py-0.5 rounded-sm font-medium">you</span>}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{desc}</p>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </Card>
         </div>
@@ -239,3 +347,4 @@ export default function MembersPage() {
     </div>
   )
 }
+

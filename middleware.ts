@@ -5,7 +5,15 @@ const isProtectedRoute = createRouteMatcher([
   '/onboarding(.*)',
 ])
 
+// These routes must remain public — they handle their own auth state
+const isPublicRoute = createRouteMatcher([
+  '/accept-invitation(.*)',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+])
+
 export default clerkMiddleware(async (auth, req) => {
+  if (isPublicRoute(req)) return
   if (isProtectedRoute(req)) {
     await auth.protect()
   }

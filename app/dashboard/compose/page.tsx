@@ -25,6 +25,7 @@ import { PLATFORMS, PLATFORM_CHAR_LIMITS } from '@/lib/constants'
 import { MOCK_CHANNELS, MOCK_SIGNATURES } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import type { Platform } from '@/lib/types'
+import { PlatformPreview } from '@/components/compose/platform-preview'
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
@@ -79,6 +80,8 @@ export default function ComposePage() {
   const [crossPostDelay, setCrossPostDelay] = useState('0')
   const [showAI, setShowAI] = useState(true)
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
+  const [previewPlatform, setPreviewPlatform] = useState<string | null>(null)
   const [showVariants, setShowVariants] = useState(false)
   const [mediaFiles, setMediaFiles] = useState<string[]>([])
   const [threadPosts, setThreadPosts] = useState<string[]>([''])
@@ -96,6 +99,12 @@ export default function ComposePage() {
   const selectedPlatforms = connectedChannels
     .filter(c => selectedChannels.includes(c.id))
     .map(c => c.platform)
+
+  // Active preview platform — default to first selected channel's platform
+  const activePlatform = previewPlatform ?? selectedPlatforms[0] ?? null
+  const activeChannel = connectedChannels.find(c =>
+    selectedChannels.includes(c.id) && c.platform === activePlatform
+  ) ?? connectedChannels.find(c => selectedChannels.includes(c.id))
 
   const strictestLimit = selectedPlatforms.length > 0
     ? Math.min(...selectedPlatforms.map(p => PLATFORM_CHAR_LIMITS[p] ?? 5000))
@@ -298,6 +307,73 @@ export default function ComposePage() {
             <Card className="bg-card border-border border-dashed p-8 text-center shadow-sm">
               <p className="text-muted-foreground text-sm">Select channels on the right to start composing</p>
             </Card>
+          )}
+
+          {/* ── Live Preview ── */}
+          {selectedPlatforms.length > 0 && showPreview && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <h3 className="text-sm font-medium text-foreground">Live Preview</h3>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm">Updates as you type</span>
+                </div>
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Hide
+                </button>
+              </div>
+
+              {/* Platform tabs */}
+              <div className="flex gap-1.5 flex-wrap">
+                {connectedChannels.filter(c => selectedChannels.includes(c.id)).map(ch => {
+                  const plat = PLATFORMS[ch.platform]
+                  const Icon = plat.icon
+                  const isActive = activePlatform === ch.platform
+                  return (
+                    <button
+                      key={ch.id}
+                      onClick={() => setPreviewPlatform(ch.platform)}
+                      className={cn(
+                        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-medium border transition-all',
+                        isActive
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="w-3 h-3" />
+                      {plat.name}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Preview card */}
+              {activePlatform && activeChannel && (
+                <div className="max-w-[480px]">
+                  <PlatformPreview
+                    platform={activePlatform}
+                    content={postType === 'thread' ? threadPosts.join('\n\n') : content}
+                    handle={activeChannel.handle}
+                    mediaFiles={mediaFiles}
+                    isThread={postType === 'thread'}
+                    threadPosts={postType === 'thread' ? threadPosts : undefined}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {selectedPlatforms.length > 0 && !showPreview && (
+            <button
+              onClick={() => setShowPreview(true)}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-accent transition-colors"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+              Show live preview
+            </button>
           )}
 
           {/* AI Copilot Panel */}

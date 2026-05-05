@@ -1,25 +1,64 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useOrganization } from '@clerk/nextjs'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AlertTriangle, Bell, Globe, CreditCard, Trash2, Check } from 'lucide-react'
+import { AlertTriangle, CreditCard, Trash2, Check, Copy, Calendar, Hash, Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TIMEZONES = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
   'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney']
 
 export default function SettingsPage() {
-  const [saved, setSaved] = useState(false)
+  const { organization, membership } = useOrganization()
+  const isOwner = membership?.role === 'org:owner'
+  const canEdit = membership?.role === 'org:owner' || membership?.role === 'org:admin'
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // Sync fields when org loads
+  useEffect(() => {
+    if (organization) {
+      setName(organization.name ?? '')
+      setSlug(organization.slug ?? '')
+    }
+  }, [organization?.id])
+
+  async function handleSave() {
+    if (!organization || !canEdit) return
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      await organization.update({ name, slug: slug.toLowerCase().replace(/\s+/g, '-') })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save changes')
+    } finally {
+      setIsSaving(false)
+    }
   }
+
+  function copyOrgId() {
+    if (!organization?.id) return
+    navigator.clipboard.writeText(organization.id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  const createdDate = organization?.createdAt
+    ? new Date(organization.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : null
 
   return (
     <div className="max-w-2xl space-y-5 pb-6">
@@ -34,38 +73,94 @@ export default function SettingsPage() {
         <TabsContent value="workspace" className="mt-5 space-y-4">
           <Card className="bg-card border-border shadow-sm p-5 space-y-4">
             <h3 className="text-sm font-medium text-foreground">Workspace Details</h3>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Workspace Name</Label>
-                <Input defaultValue="My Workspace" className="mt-1 h-8 text-xs bg-input border-border" />
-              </div>
-              <div>
-                <Label className="text-xs">Workspace URL</Label>
-                <div className="flex gap-2 mt-1">
-                  <span className="flex items-center text-xs text-muted-foreground bg-muted px-3 rounded-sm border border-border">caelpost.com/</span>
-                  <Input defaultValue="my-workspace" className="flex-1 h-8 text-xs bg-input border-border" />
+
+            {organization ? (
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Workspace Name</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!canEdit}
+                    className="mt-1 h-8 text-xs bg-input border-border disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Workspace Slug</Label>
+                  <div className="flex gap-2 mt-1">
+                    <span className="flex items-center text-xs text-muted-foreground bg-muted px-3 rounded-sm border border-border select-none">
+                      app/
+                    </span>
+                    <Input
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      disabled={!canEdit}
+                      placeholder="my-workspace"
+                      className="flex-1 h-8 text-xs bg-input border-border font-mono disabled:opacity-60"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">Used in URLs and API references. Lowercase letters, numbers, and hyphens only.</p>
+                </div>
+
+                {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+
+                {canEdit && (
+                  <Button size="sm" onClick={handleSave} disabled={isSaving || !name.trim()} className="text-xs gap-1.5">
+                    {saved ? <><Check className="w-3.5 h-3.5" />Saved</> : isSaving ? 'Saving…' : 'Save Changes'}
+                  </Button>
+                )}
+
+                {/* Org metadata */}
+                <div className="pt-3 mt-1 border-t border-border space-y-2">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-2">Workspace Info</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Hash className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="text-[11px]">Organization ID</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-mono text-muted-foreground truncate max-w-[160px]">{organization.id}</span>
+                      <button onClick={copyOrgId} className="p-1 hover:text-foreground text-muted-foreground transition-colors rounded" title="Copy ID">
+                        {copied ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                    </div>
+                  </div>
+                  {createdDate && (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="text-[11px]">Created</span>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">{createdDate}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Link2 className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="text-[11px]">Members</span>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">{organization.membersCount ?? '—'}</span>
+                  </div>
                 </div>
               </div>
-              <div>
-                <Label className="text-xs">Description</Label>
-                <Input defaultValue="Social media management workspace" className="mt-1 h-8 text-xs bg-input border-border" />
-              </div>
-            </div>
-            <Button size="sm" onClick={handleSave} className="text-xs gap-1.5">
-              {saved ? <><Check className="w-3.5 h-3.5" /> Saved</> : 'Save Changes'}
-            </Button>
+            ) : (
+              <div className="py-6 text-center text-sm text-muted-foreground">Loading workspace…</div>
+            )}
           </Card>
 
-          <Card className="bg-destructive/5 border-destructive/20 shadow-sm p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-destructive" />
-              <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
-            </div>
-            <p className="text-xs text-muted-foreground">Permanently delete this workspace and all its data. This action cannot be undone.</p>
-            <Button variant="outline" size="sm" className="text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5">
-              <Trash2 className="w-3.5 h-3.5" /> Delete Workspace
-            </Button>
-          </Card>
+          {isOwner && (
+            <Card className="bg-destructive/5 border-destructive/20 shadow-sm p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-destructive" />
+                <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">Permanently delete this workspace and all its data. This action cannot be undone.</p>
+              <Button variant="outline" size="sm" className="text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5"
+                onClick={() => organization?.destroy()}>
+                <Trash2 className="w-3.5 h-3.5" /> Delete Workspace
+              </Button>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Notifications */}

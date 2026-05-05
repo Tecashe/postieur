@@ -78,7 +78,7 @@ export default function DashboardPage() {
             pinterest: { engagement: 4.5, reach: 54000 },
             bluesky: { engagement: 7.2, reach: 12000 },
           }
-          const stats = platformStats[channel.platform]
+          const stats = platformStats[channel.platform as keyof typeof platformStats]
 
           return (
             <div

@@ -1,243 +1,285 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { TrendingUp, Users, Heart, MessageCircle, Share2, Eye } from 'lucide-react'
-import { MOCK_POSTS, MOCK_PLATFORM_STATS } from '@/lib/mock-data'
+import { Button } from '@/components/ui/button'
+import {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts'
+import { TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share2, Users, Zap } from 'lucide-react'
+import { MOCK_PLATFORM_STATS, MOCK_HEATMAP, MOCK_BEST_TIMES } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
-const analyticsData = [
-  { date: 'Mon', impressions: 2400, engagement: 240, clicks: 321 },
-  { date: 'Tue', impressions: 1398, engagement: 221, clicks: 456 },
-  { date: 'Wed', impressions: 9800, engagement: 229, clicks: 789 },
-  { date: 'Thu', impressions: 3908, engagement: 200, clicks: 345 },
-  { date: 'Fri', impressions: 4800, engagement: 221, clicks: 567 },
-  { date: 'Sat', impressions: 3800, engagement: 250, clicks: 432 },
-  { date: 'Sun', impressions: 4300, engagement: 210, clicks: 234 },
-]
+const PERIOD_OPTIONS = ['7d', '30d', '90d'] as const
+type Period = typeof PERIOD_OPTIONS[number]
 
-const platformData = [
-  { name: 'Instagram', value: 35, color: '#E4405F' },
-  { name: 'LinkedIn', value: 28, color: '#0A66C2' },
-  { name: 'Twitter', value: 22, color: '#1DA1F2' },
-  { name: 'TikTok', value: 15, color: '#000000' },
-]
-
-const audienceGrowth = [
-  { month: 'Jan', followers: 8400 },
-  { month: 'Feb', followers: 11250 },
-  { month: 'Mar', followers: 15680 },
-  { month: 'Apr', followers: 21540 },
-  { month: 'May', followers: 28960 },
-  { month: 'Jun', followers: 38240 },
-]
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(' ')
+const TREND_DATA: Record<Period, { date: string; impressions: number; engagement: number; followers: number }[]> = {
+  '7d': [
+    { date: 'Mon', impressions: 12400, engagement: 840, followers: 42 },
+    { date: 'Tue', impressions: 9800,  engagement: 620, followers: 31 },
+    { date: 'Wed', impressions: 18600, engagement: 1240, followers: 78 },
+    { date: 'Thu', impressions: 14200, engagement: 960, followers: 55 },
+    { date: 'Fri', impressions: 22100, engagement: 1480, followers: 91 },
+    { date: 'Sat', impressions: 16800, engagement: 1120, followers: 64 },
+    { date: 'Sun', impressions: 19400, engagement: 1300, followers: 72 },
+  ],
+  '30d': Array.from({ length: 30 }, (_, i) => ({
+    date: `D${i + 1}`,
+    impressions: 8000 + Math.random() * 20000,
+    engagement: 400 + Math.random() * 1500,
+    followers: 20 + Math.random() * 120,
+  })),
+  '90d': Array.from({ length: 12 }, (_, i) => ({
+    date: `W${i + 1}`,
+    impressions: 60000 + Math.random() * 80000,
+    engagement: 3000 + Math.random() * 8000,
+    followers: 180 + Math.random() * 600,
+  })),
 }
 
-const KPICard = ({ icon: Icon, label, value, change, trend }: { icon: React.ReactNode, label: string, value: string | number, change: string, trend: 'up' | 'down' | 'neutral' }) => (
-  <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">{label}</p>
-        <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">{value}</p>
-        <p className={cn(
-          'text-xs mt-2 font-medium',
-          trend === 'up' ? 'text-emerald-600 dark:text-emerald-400' : trend === 'down' ? 'text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-400'
-        )}>
-          {change}
-        </p>
+const PIE_COLORS = ['oklch(0.390 0.072 55)', 'oklch(0.520 0.095 178)', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444']
+
+function MetricCard({ label, value, change, trend, icon: Icon }: {
+  label: string; value: string; change: string; trend: 'up' | 'down' | 'flat'; icon: React.ElementType
+}) {
+  return (
+    <Card className="bg-card border-border shadow-sm p-4">
+      <div className="flex items-start justify-between mb-2">
+        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">{label}</p>
+        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
       </div>
-      <div className={cn(
-        'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0',
-        trend === 'up' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-      )}>
-        {Icon}
-      </div>
-    </div>
-  </Card>
-)
+      <p className="text-2xl font-light text-foreground">{value}</p>
+      <p className={cn('text-xs mt-1 flex items-center gap-0.5',
+        trend === 'up' ? 'text-emerald-600 dark:text-emerald-400' :
+        trend === 'down' ? 'text-destructive' : 'text-muted-foreground')}>
+        {trend === 'up' && <TrendingUp className="w-3 h-3" />}
+        {trend === 'down' && <TrendingDown className="w-3 h-3" />}
+        {change}
+      </p>
+    </Card>
+  )
+}
+
+// Engagement heatmap (7×24)
+function HeatmapCell({ value, max }: { value: number; max: number }) {
+  const intensity = max > 0 ? value / max : 0
+  return (
+    <div
+      className="w-full aspect-square rounded-[1px] transition-colors"
+      style={{
+        backgroundColor: intensity > 0
+          ? `oklch(${0.520 - intensity * 0.15} ${0.095 + intensity * 0.08} 178 / ${0.15 + intensity * 0.85})`
+          : 'hsl(var(--muted))',
+      }}
+      title={`${value} engagements`}
+    />
+  )
+}
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const HOURS = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}`)
 
 export default function AnalyticsPage() {
-  const [timeframe, setTimeframe] = useState('week')
-  const publishedPosts = MOCK_POSTS.filter(p => p.status === 'published')
-  const topPosts = publishedPosts
-    .sort((a, b) => (b.engagement?.likes || 0) - (a.engagement?.likes || 0))
-    .slice(0, 5)
+  const [period, setPeriod] = useState<Period>('7d')
+  const [metric, setMetric] = useState<'impressions' | 'engagement' | 'followers'>('impressions')
+
+  const trendData = TREND_DATA[period]
+  const pieData = MOCK_PLATFORM_STATS.map((s, i) => ({
+    name: PLATFORMS[s.platform]?.name ?? s.platform,
+    value: s.engagement,
+    color: PIE_COLORS[i % PIE_COLORS.length],
+  }))
+
+  const heatmaxVal = MOCK_HEATMAP.length > 0 ? Math.max(...MOCK_HEATMAP.map(c => c.value)) : 1
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light text-zinc-900 dark:text-white">Analytics</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Track performance across all platforms</p>
+    <div className="space-y-5 pb-6">
+      {/* Controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex rounded-sm overflow-hidden border border-border">
+          {PERIOD_OPTIONS.map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={cn('px-3 py-1.5 text-xs font-medium transition-colors border-r border-border last:border-r-0',
+                period === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/60')}>
+              {p}
+            </button>
+          ))}
         </div>
-        <div className="flex gap-2">
-          {['week', 'month', 'year'].map(period => (
-            <Button
-              key={period}
-              variant={timeframe === period ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTimeframe(period)}
-              className="capitalize text-xs sm:text-sm"
-            >
-              {period}
-            </Button>
+        <div className="flex rounded-sm overflow-hidden border border-border">
+          {(['impressions', 'engagement', 'followers'] as const).map(m => (
+            <button key={m} onClick={() => setMetric(m)}
+              className={cn('px-3 py-1.5 text-xs font-medium transition-colors border-r border-border last:border-r-0 capitalize',
+                metric === m ? 'bg-accent/15 text-accent' : 'text-muted-foreground hover:bg-muted/60')}>
+              {m}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          icon={<Eye className="w-5 h-5" />}
-          label="Total Impressions"
-          value="32.4K"
-          change="+12.5% from last week"
-          trend="up"
-        />
-        <KPICard
-          icon={<Heart className="w-5 h-5" />}
-          label="Total Engagement"
-          value="2,358"
-          change="+8.2% from last week"
-          trend="up"
-        />
-        <KPICard
-          icon={<Users className="w-5 h-5" />}
-          label="New Followers"
-          value="542"
-          change="+15.3% from last week"
-          trend="up"
-        />
-        <KPICard
-          icon={<TrendingUp className="w-5 h-5" />}
-          label="Engagement Rate"
-          value="7.3%"
-          change="+0.8% from last week"
-          trend="up"
-        />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard label="Impressions" value="847.2K" change="+24% vs last period" trend="up" icon={Eye} />
+        <MetricCard label="Engagements" value="31.4K" change="+18% vs last period" trend="up" icon={Heart} />
+        <MetricCard label="Comments" value="4,821" change="+9% vs last period" trend="up" icon={MessageCircle} />
+        <MetricCard label="Follower Growth" value="+2,341" change="+31% vs last period" trend="up" icon={Users} />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Activity Chart */}
-        <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 lg:col-span-2">
-          <h3 className="text-base font-light text-zinc-900 dark:text-white mb-4">Activity This Week</h3>
-          <div className="overflow-x-auto -mx-4 sm:-mx-6">
-            <div className="px-4 sm:px-6">
-              <ResponsiveContainer width={typeof window !== 'undefined' ? 100 : 500} height={300}>
-                <LineChart data={analyticsData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                  <XAxis dataKey="date" stroke="#71717a" />
-                  <YAxis stroke="#71717a" />
-                  <Tooltip contentStyle={{ backgroundColor: '#27272a', border: '1px solid #3f3f46', borderRadius: '8px' }} labelStyle={{ color: '#fafafa' }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="impressions" stroke="#09090b" dot={{ fill: '#09090b' }} name="Impressions" strokeWidth={2} />
-                  <Line type="monotone" dataKey="engagement" stroke="#10b981" dot={{ fill: '#10b981' }} name="Engagement" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </Card>
-
-        {/* Platform Distribution */}
-        <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <h3 className="text-base font-light text-zinc-900 dark:text-white mb-4">By Platform</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={platformData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value">
-                {platformData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-              </Pie>
-              <Tooltip contentStyle={{ backgroundColor: '#27272a', border: '1px solid #3f3f46', borderRadius: '8px' }} labelStyle={{ color: '#fafafa' }} />
-            </PieChart>
+      {/* Main trend chart */}
+      <Card className="bg-card border-border shadow-sm">
+        <div className="px-5 py-3 border-b border-border">
+          <h2 className="text-sm font-medium text-foreground capitalize">{metric} over time</h2>
+        </div>
+        <div className="p-5">
+          <ResponsiveContainer width="100%" height={230}>
+            <LineChart data={trendData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={45} />
+              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '4px', fontSize: 11 }} />
+              <Line type="monotone" dataKey={metric} stroke="oklch(0.520 0.095 178)" strokeWidth={2} dot={false} />
+            </LineChart>
           </ResponsiveContainer>
-          <div className="mt-4 space-y-2">
-            {platformData.map(platform => (
-              <div key={platform.name} className="flex items-center justify-between">
-                <span className="text-xs text-zinc-600 dark:text-zinc-400">{platform.name}</span>
-                <span className="text-sm font-medium text-zinc-900 dark:text-white">{platform.value}%</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
-      {/* Growth & Top Posts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Audience Growth */}
-        <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <h3 className="text-base font-light text-zinc-900 dark:text-white mb-4">Audience Growth</h3>
-          <div className="overflow-x-auto -mx-4 sm:-mx-6">
-            <div className="px-4 sm:px-6">
-              <ResponsiveContainer width={typeof window !== 'undefined' ? 100 : 400} height={300}>
-                <BarChart data={audienceGrowth}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                  <XAxis dataKey="month" stroke="#71717a" />
-                  <YAxis stroke="#71717a" />
-                  <Tooltip contentStyle={{ backgroundColor: '#27272a', border: '1px solid #3f3f46', borderRadius: '8px' }} labelStyle={{ color: '#fafafa' }} />
-                  <Bar dataKey="followers" fill="#10b981" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Platform distribution */}
+        <Card className="bg-card border-border shadow-sm">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-medium text-foreground">Engagement by Platform</h2>
+          </div>
+          <div className="p-5 flex items-center gap-6">
+            <ResponsiveContainer width={160} height={160}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
+                  {pieData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '4px', fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex-1 space-y-2">
+              {pieData.map((d, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                  <span className="text-xs text-foreground flex-1">{d.name}</span>
+                  <span className="text-xs font-mono text-muted-foreground">{(d.value ?? 0).toLocaleString()}</span>
+                </div>
+              ))}
             </div>
           </div>
         </Card>
 
-        {/* Top Posts */}
-        <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <h3 className="text-base font-light text-zinc-900 dark:text-white mb-4">Top Performing Posts</h3>
-          <div className="space-y-3">
-            {topPosts.map((post, idx) => (
-              <div key={post.id} className="flex items-start gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white truncate line-clamp-2">{post.content}</p>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <Badge className="text-xs">{post.platform}</Badge>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{(post.engagement?.likes || 0).toLocaleString()} likes</span>
+        {/* Best posting times */}
+        <Card className="bg-card border-border shadow-sm">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="text-sm font-medium text-foreground">Best Times to Post</h2>
+          </div>
+          <div className="p-4 space-y-2">
+            {MOCK_BEST_TIMES.slice(0, 6).map((slot, i) => {
+              const plat = PLATFORMS[slot.platform]
+              const Icon = plat?.icon
+              return (
+                <div key={i} className="flex items-center gap-3 p-2.5 rounded-sm hover:bg-muted/40 transition-colors">
+                  {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-foreground">{plat?.name} · {slot.day} {slot.hour}:00</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-accent rounded-full" style={{ width: `${slot.score}%` }} />
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground">{slot.score}</span>
+                    </div>
                   </div>
+                  <Zap className="w-3 h-3 text-accent flex-shrink-0" />
                 </div>
-                <TrendingUp className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-1" />
-              </div>
-            ))}
+              )
+            })}
           </div>
         </Card>
       </div>
 
-      {/* Detailed Metrics */}
-      <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <h3 className="text-base font-light text-zinc-900 dark:text-white mb-4">Platform Performance</h3>
+      {/* Engagement Heatmap */}
+      <Card className="bg-card border-border shadow-sm">
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-medium text-foreground">Engagement Heatmap</h2>
+          <p className="text-[11px] text-muted-foreground">24-hour by day-of-week activity</p>
+        </div>
+        <div className="p-5 overflow-x-auto">
+          <div className="flex gap-2 min-w-[600px]">
+            <div className="flex flex-col gap-1 pr-2">
+              <div className="h-4" />
+              {DAYS.map(d => (
+                <div key={d} className="h-4 flex items-center text-[10px] text-muted-foreground w-7 justify-end">{d}</div>
+              ))}
+            </div>
+            <div className="flex-1">
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(24, 1fr)' }}>
+                {HOURS.map(h => (
+                  <div key={h} className="h-4 flex items-center justify-center text-[9px] text-muted-foreground">{parseInt(h) % 6 === 0 ? h : ''}</div>
+                ))}
+                {DAYS.map((_, dayIdx) =>
+                  HOURS.map((_, hourIdx) => {
+                    const cell = MOCK_HEATMAP.find(c => c.dayOfWeek === dayIdx && c.hour === hourIdx)
+                    return <HeatmapCell key={`${dayIdx}-${hourIdx}`} value={cell?.value ?? 0} max={heatmaxVal} />
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-3 justify-end">
+            <span className="text-[10px] text-muted-foreground">Low</span>
+            {[0, 0.25, 0.5, 0.75, 1].map(v => (
+              <div key={v} className="w-4 h-2 rounded-[1px]"
+                style={{ backgroundColor: `oklch(${0.520 - v * 0.15} ${0.095 + v * 0.08} 178 / ${0.15 + v * 0.85})` }} />
+            ))}
+            <span className="text-[10px] text-muted-foreground">High</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Per-platform stats table */}
+      <Card className="bg-card border-border shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-border">
+          <h2 className="text-sm font-medium text-foreground">Platform Breakdown</h2>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-zinc-600 dark:text-zinc-400">Platform</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-600 dark:text-zinc-400">Engagement Rate</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-600 dark:text-zinc-400">Reach</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-zinc-600 dark:text-zinc-400">Posts</th>
+              <tr className="border-b border-border bg-muted/30">
+                <th className="text-left px-5 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Platform</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Posts</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Impressions</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Engagement</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Followers</th>
+                <th className="text-right px-5 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Growth</th>
               </tr>
             </thead>
-            <tbody>
-              {MOCK_PLATFORM_STATS.slice(0, 6).map(stat => {
-                const Icon = PLATFORMS[stat.platform].icon
+            <tbody className="divide-y divide-border">
+              {MOCK_PLATFORM_STATS.map(stat => {
+                const plat = PLATFORMS[stat.platform]
+                const Icon = plat?.icon
                 return (
-                  <tr key={stat.platform} className="border-b border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                    <td className="py-3 px-4 flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-zinc-600 dark:text-zinc-400 flex-shrink-0" />
-                      <span className="text-sm font-medium text-zinc-900 dark:text-white">{PLATFORMS[stat.platform].label}</span>
+                  <tr key={stat.platform} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground" />}
+                        <span className="text-foreground font-medium">{plat?.name ?? stat.platform}</span>
+                      </div>
                     </td>
-                    <td className="text-right py-3 px-4">
-                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{stat.engagementRate}%</span>
-                    </td>
-                    <td className="text-right py-3 px-4">
-                      <span className="text-sm text-zinc-900 dark:text-white">{(stat.reach / 1000).toFixed(0)}K</span>
-                    </td>
-                    <td className="text-right py-3 px-4">
-                      <span className="text-sm text-zinc-600 dark:text-zinc-400">{Math.floor(Math.random() * 20) + 5}</span>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{stat.posts}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{(stat.impressions ?? stat.reach ?? 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{(stat.engagement ?? 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{stat.followers.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right">
+                      <Badge className={cn('text-[10px] border-0',
+                        (stat.followerGrowth ?? 0) >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive')}>
+                        {(stat.followerGrowth ?? 0) >= 0 ? '+' : ''}{stat.followerGrowth ?? 0}%
+                      </Badge>
                     </td>
                   </tr>
                 )

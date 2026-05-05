@@ -1,176 +1,187 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { GripVertical, Trash2, Eye, Send, Clock, Zap } from 'lucide-react'
-import { MOCK_POSTS } from '@/lib/mock-data'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import {
+  GripVertical, Plus, Clock, Trash2, Zap, LayoutGrid, List, Settings,
+  ChevronRight, Calendar,
+} from 'lucide-react'
+import Link from 'next/link'
+import { MOCK_POSTS, MOCK_QUEUE_SLOTS } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import type { Post } from '@/lib/types'
 
-export default function QueuePage() {
-  const [sortBy, setSortBy] = useState<'date' | 'platform'>('date')
-  const [selectedPosts, setSelectedPosts] = useState<string[]>([])
-
-  const scheduledPosts = MOCK_POSTS.filter(p => p.status === 'scheduled').slice(0, 10)
-  
-  const sortedPosts = sortBy === 'date' 
-    ? [...scheduledPosts].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
-    : [...scheduledPosts].sort((a, b) => (a.platforms[0] || '').localeCompare(b.platforms[0] || ''))
-
-  const handleSelectPost = (postId: string) => {
-    setSelectedPosts(prev =>
-      prev.includes(postId)
-        ? prev.filter(id => id !== postId)
-        : [...prev, postId]
-    )
-  }
+function SortableRow({ post, onRemove }: { post: Post; onRemove: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: post.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+  const Icon = PLATFORMS[post.platforms[0]]?.icon
+  const dt = new Date(post.scheduledAt ?? Date.now())
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light text-zinc-900 dark:text-white">Queue</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Manage scheduled posts and optimize timing</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="text-xs sm:text-sm">
-            <Zap className="w-4 h-4 mr-2" />
-            Auto-optimize
-          </Button>
-          <Button size="sm" className="text-xs sm:text-sm">
-            <Send className="w-4 h-4 mr-2" />
-            Post Now
-          </Button>
-        </div>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 transition-all bg-card',
+        isDragging ? 'shadow-md opacity-90 z-10 relative rounded-sm' : 'hover:bg-muted/20'
+      )}
+    >
+      <button {...attributes} {...listeners} className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing">
+        <GripVertical className="w-4 h-4" />
+      </button>
+      {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-foreground line-clamp-1">{post.content}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {dt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+          {' · '}{dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </p>
       </div>
+      <Badge className={cn('text-[10px] border-0 flex-shrink-0',
+        post.status === 'scheduled' ? 'bg-accent/10 text-accent' :
+        post.status === 'published' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+        'bg-muted text-muted-foreground')}>
+        {post.status}
+      </Badge>
+      <button onClick={() => onRemove(post.id)} className="text-muted-foreground/40 hover:text-destructive transition-colors ml-1">
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">Scheduled</p>
-          <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">{scheduledPosts.length}</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Next 30 days</p>
-        </Card>
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">This Week</p>
-          <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">
-            {scheduledPosts.filter(p => {
-              const date = new Date(p.scheduledAt)
-              const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-              return date <= weekFromNow
-            }).length}
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Posting soon</p>
-        </Card>
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">Selected</p>
-          <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">{selectedPosts.length}</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">For bulk actions</p>
-        </Card>
-      </div>
+export default function QueuePage() {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
-      {/* Controls */}
-      <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <Input 
-              placeholder="Search posts..." 
-              className="border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-            />
+  const [posts, setPosts] = useState<Post[]>(
+    MOCK_POSTS.filter(p => p.status === 'scheduled').slice(0, 10)
+  )
+  const [viewMode, setViewMode] = useState<'list' | 'slots'>('list')
+  const [autoQueue, setAutoQueue] = useState(true)
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      setPosts(items => {
+        const oldIdx = items.findIndex(i => i.id === active.id)
+        const newIdx = items.findIndex(i => i.id === over.id)
+        return arrayMove(items, oldIdx, newIdx)
+      })
+    }
+  }
+
+  const handleRemove = (id: string) => setPosts(items => items.filter(i => i.id !== id))
+
+  return (
+    <div className="space-y-5 pb-6">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button asChild size="sm" className="gap-1.5 text-xs">
+          <Link href="/dashboard/compose"><Plus className="w-3.5 h-3.5" /> Add Post</Link>
+        </Button>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-sm overflow-hidden border border-border">
+            <button onClick={() => setViewMode('list')} className={cn('px-3 py-1.5 transition-colors', viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/60')}>
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setViewMode('slots')} className={cn('px-3 py-1.5 transition-colors border-l border-border', viewMode === 'slots' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/60')}>
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="flex gap-2">
-            {['date', 'platform'].map(option => (
-              <Button
-                key={option}
-                variant={sortBy === option ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSortBy(option as 'date' | 'platform')}
-                className="capitalize text-xs sm:text-sm"
-              >
-                {option}
-              </Button>
-            ))}
-          </div>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs border-border">
+            <Settings className="w-3.5 h-3.5" /> Slot Config
+          </Button>
         </div>
-      </Card>
-
-      {/* Queue Items */}
-      <div className="space-y-2">
-        {sortedPosts.map((post) => {
-          const platform = post.platforms[0]
-          const Icon = platform ? PLATFORMS[platform]?.icon : null
-          const scheduledDate = new Date(post.scheduledAt)
-          const isToday = scheduledDate.toDateString() === new Date().toDateString()
-          const isTomorrow = scheduledDate.toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString()
-          
-          return (
-            <Card 
-              key={post.id}
-              className={cn(
-                'p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-move',
-                selectedPosts.includes(post.id) && 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  checked={selectedPosts.includes(post.id)}
-                  onCheckedChange={() => handleSelectPost(post.id)}
-                  className="mt-1"
-                />
-                <GripVertical className="w-4 h-4 text-zinc-400 dark:text-zinc-600 mt-1 flex-shrink-0" />
-                
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white line-clamp-2">{post.content}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <Badge className="flex items-center gap-1 text-xs">
-                      {Icon && <Icon className="w-3 h-3" />}
-                      {platform ? PLATFORMS[platform]?.name : ''}
-                    </Badge>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {isToday ? 'Today' : isTomorrow ? 'Tomorrow' : scheduledDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {scheduledDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 flex-shrink-0">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Preview">
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:text-red-700" title="Delete">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )
-        })}
       </div>
 
-      {/* Bulk Actions */}
-      {selectedPosts.length > 0 && (
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-emerald-50 dark:bg-emerald-950 sticky bottom-0">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-5">
+        {/* Queue list */}
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
-              {selectedPosts.length} post{selectedPosts.length !== 1 ? 's' : ''} selected
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setSelectedPosts([])}>
-                Clear
-              </Button>
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                <Send className="w-4 h-4 mr-2" />
-                Post All
-              </Button>
+            <p className="text-xs text-muted-foreground">{posts.length} posts in queue · Drag to reorder</p>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground">Auto-fill</Label>
+              <Switch checked={autoQueue} onCheckedChange={setAutoQueue} className="data-[state=checked]:bg-accent scale-90" />
             </div>
           </div>
-        </Card>
-      )}
+
+          <Card className="bg-card border-border shadow-sm overflow-hidden">
+            {posts.length === 0 ? (
+              <div className="py-16 text-center">
+                <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Queue is empty</p>
+                <Button asChild variant="ghost" size="sm" className="mt-3 text-xs text-accent hover:bg-accent/5">
+                  <Link href="/dashboard/compose">Add your first post</Link>
+                </Button>
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={handleDragEnd}>
+                <SortableContext items={posts.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                  {posts.map(post => (
+                    <SortableRow key={post.id} post={post} onRemove={handleRemove} />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            )}
+          </Card>
+        </div>
+
+        {/* Queue slots */}
+        <div className="space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Time Slots</p>
+          <Card className="bg-card border-border shadow-sm">
+            <div className="divide-y divide-border">
+              {MOCK_QUEUE_SLOTS.slice(0, 8).map(slot => (
+                <div key={slot.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs text-foreground">{slot.day ?? `Day ${slot.dayOfWeek}`} · {slot.time ?? `${slot.hour}:${String(slot.minute).padStart(2,'0')}`}</p>
+                    <p className="text-[10px] text-muted-foreground">{(slot.platforms ?? []).length} platform{(slot.platforms ?? []).length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="flex gap-0.5">
+                    {(slot.platforms ?? []).slice(0, 3).map(p => {
+                      const Icon = PLATFORMS[p]?.icon
+                      return Icon ? <Icon key={p} className="w-3 h-3 text-muted-foreground/60" /> : null
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-2.5 border-t border-border">
+              <Button variant="ghost" size="sm" className="w-full text-xs text-accent hover:bg-accent/5 gap-1">
+                <Plus className="w-3 h-3" /> Add time slot
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="bg-accent/5 border-accent/20 shadow-sm p-4">
+            <div className="flex gap-2.5">
+              <Zap className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-medium text-foreground">Queue Intelligence</p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">Auto-schedule fills your queue at optimal times based on historical engagement patterns.</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

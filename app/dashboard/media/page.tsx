@@ -1,250 +1,160 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Upload, Search, Filter, Download, Trash2, Image as ImageIcon, Video, MoreVertical } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  Search, Grid3X3, List, Upload, FolderOpen, Image as ImageIcon, Video,
+  FileImage, Trash2, Download, Copy, MoreVertical, Plus,
+} from 'lucide-react'
+import { MOCK_MEDIA } from '@/lib/mock-data'
+import { cn } from '@/lib/utils'
+import type { MediaItem } from '@/lib/types'
+
+const FOLDERS = ['All', 'Campaign Assets', 'Brand Kit', 'Product Photos', 'Videos', 'GIFs']
+
+function formatSize(bytes: number) {
+  if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024).toFixed(0)} KB`
+}
+
+function MediaCard({ item, selected, onSelect }: { item: MediaItem; selected: boolean; onSelect: () => void }) {
+  const bg = item.type === 'image' ? 'bg-primary/5' : item.type === 'video' ? 'bg-accent/5' : 'bg-muted'
+  const Icon = item.type === 'video' ? Video : item.type === 'gif' ? FileImage : ImageIcon
+  return (
+    <div onClick={onSelect}
+      className={cn('group relative rounded-sm border overflow-hidden cursor-pointer transition-all',
+        selected ? 'border-accent ring-1 ring-accent/30' : 'border-border hover:border-border')}>
+      {/* Preview */}
+      <div className={cn('aspect-square flex items-center justify-center', bg)}>
+        <Icon className="w-8 h-8 text-muted-foreground/30" />
+      </div>
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-foreground/0 group-hover:bg-foreground/10 transition-all flex items-start justify-end p-1.5 opacity-0 group-hover:opacity-100">
+        <div className="flex gap-0.5">
+          <button className="w-6 h-6 bg-background/90 rounded-sm flex items-center justify-center hover:bg-background">
+            <Copy className="w-3 h-3 text-foreground" />
+          </button>
+          <button className="w-6 h-6 bg-background/90 rounded-sm flex items-center justify-center hover:bg-background">
+            <Download className="w-3 h-3 text-foreground" />
+          </button>
+        </div>
+      </div>
+      {selected && (
+        <div className="absolute top-1.5 left-1.5 w-4 h-4 bg-accent rounded-sm flex items-center justify-center">
+          <svg className="w-2.5 h-2.5 text-accent-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      )}
+      <div className="px-2 py-1.5 border-t border-border bg-card">
+        <p className="text-[10px] text-foreground font-medium truncate">{item.name}</p>
+        <p className="text-[9px] text-muted-foreground">{formatSize(item.size)}</p>
+      </div>
+    </div>
+  )
+}
 
 export default function MediaPage() {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [selectedItems, setSelectedItems] = useState<string[]>([])
-  const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all')
+  const [search, setSearch] = useState('')
+  const [folder, setFolder] = useState('All')
+  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  const mediaItems = Array.from({ length: 24 }).map((_, i) => ({
-    id: `media-${i}`,
-    name: `${i % 2 === 0 ? 'Campaign' : 'Product'} ${Math.floor(i / 2) + 1}`,
-    type: i % 3 === 0 ? 'video' : 'image',
-    size: Math.floor(Math.random() * 5000) + 500,
-    date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-    uses: Math.floor(Math.random() * 15) + 1,
-  }))
+  const toggleSelect = (id: string) => setSelected(prev => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
 
-  const filteredItems = filterType === 'all' ? mediaItems : mediaItems.filter(item => item.type === filterType)
-
-  const handleSelectItem = (id: string) => {
-    setSelectedItems(prev =>
-      prev.includes(id)
-        ? prev.filter(x => x !== id)
-        : [...prev, id]
-    )
-  }
-
-  const totalSize = mediaItems.reduce((sum, item) => sum + item.size, 0)
-  const usedStorage = Math.floor((totalSize / 5000) * 100)
+  const filtered = MOCK_MEDIA.filter(m =>
+    (folder === 'All' || m.folder === folder) &&
+    (!search || m.name.toLowerCase().includes(search.toLowerCase()) ||
+     m.tags.some(t => t.toLowerCase().includes(search.toLowerCase())))
+  )
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light text-zinc-900 dark:text-white">Media Library</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Upload and manage your images and videos</p>
-        </div>
-        <Button size="sm" className="text-xs sm:text-sm w-full sm:w-auto">
-          <Upload className="w-4 h-4 mr-2" />
-          Upload Files
-        </Button>
+    <div className="flex gap-4 h-full pb-6">
+      {/* Folder tree */}
+      <div className="w-44 flex-shrink-0 space-y-1">
+        <Button size="sm" className="w-full gap-1.5 text-xs mb-3"><Upload className="w-3.5 h-3.5" /> Upload</Button>
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest px-2 mb-1">Folders</p>
+        {FOLDERS.map(f => (
+          <button key={f} onClick={() => setFolder(f)}
+            className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-xs transition-all text-left',
+              folder === f ? 'bg-primary/8 text-primary' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground')}>
+            <FolderOpen className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">{f}</span>
+          </button>
+        ))}
+        <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-xs text-muted-foreground/50 hover:text-muted-foreground transition-all">
+          <Plus className="w-3.5 h-3.5" /> New Folder
+        </button>
       </div>
 
-      {/* Storage */}
-      <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Storage Used</p>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{usedStorage}% of 5 GB</p>
-        </div>
-        <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-2">
-          <div 
-            className="bg-emerald-500 h-2 rounded-full transition-all"
-            style={{ width: `${usedStorage}%` }}
-          />
-        </div>
-      </Card>
-
-      {/* Controls */}
-      <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="flex-1 w-full">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-400" />
-              <Input
-                placeholder="Search media..."
-                className="pl-10 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm"
-              />
-            </div>
+      {/* Main */}
+      <div className="flex-1 min-w-0 space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search media..." className="pl-8 h-8 text-xs bg-input border-border" />
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button
-              variant={filterType === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterType('all')}
-              className="flex-1 sm:flex-none text-xs"
-            >
-              All
-            </Button>
-            <Button
-              variant={filterType === 'image' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterType('image')}
-              className="flex-1 sm:flex-none text-xs"
-            >
-              <ImageIcon className="w-3 h-3 mr-1" />
-              Images
-            </Button>
-            <Button
-              variant={filterType === 'video' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterType('video')}
-              className="flex-1 sm:flex-none text-xs"
-            >
-              <Video className="w-3 h-3 mr-1" />
-              Videos
-            </Button>
+          {selected.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1 border-border"><Download className="w-3 h-3" /> Download</Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-destructive hover:bg-destructive/5"><Trash2 className="w-3 h-3" /> Delete</Button>
+            </div>
+          )}
+          <div className="ml-auto flex gap-1 border border-border rounded-sm p-0.5">
+            <button onClick={() => setView('grid')} className={cn('p-1.5 rounded-[2px] transition-all', view === 'grid' ? 'bg-muted' : 'text-muted-foreground hover:text-foreground')}>
+              <Grid3X3 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setView('list')} className={cn('p-1.5 rounded-[2px] transition-all', view === 'list' ? 'bg-muted' : 'text-muted-foreground hover:text-foreground')}>
+              <List className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
-      </Card>
 
-      {/* View Toggle */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{filteredItems.length} items</p>
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'grid' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('grid')}
-            className="h-8 w-8 p-0"
-          >
-            ⊞
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-            className="h-8 w-8 p-0"
-          >
-            ≡
-          </Button>
-        </div>
-      </div>
+        <p className="text-[11px] text-muted-foreground">{filtered.length} items</p>
 
-      {/* Media Grid */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className={cn(
-                'rounded-lg border-2 overflow-hidden transition-all cursor-pointer group',
-                selectedItems.includes(item.id)
-                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
-                  : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-              )}
-            >
-              <div
-                className="aspect-square bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center group-hover:opacity-80 transition-opacity relative"
-              >
-                {item.type === 'video' ? (
-                  <Video className="w-8 h-8 text-zinc-500 dark:text-zinc-400" />
-                ) : (
-                  <ImageIcon className="w-8 h-8 text-zinc-500 dark:text-zinc-400" />
-                )}
-                <Checkbox
-                  checked={selectedItems.includes(item.id)}
-                  onCheckedChange={() => handleSelectItem(item.id)}
-                  className="absolute top-2 right-2"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-              <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-                <p className="text-xs font-medium text-zinc-900 dark:text-white truncate">{item.name}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">{(item.size / 1000).toFixed(1)} MB</span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">{item.uses} uses</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filteredItems.map((item) => (
-            <Card
-              key={item.id}
-              className={cn(
-                'p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors',
-                selectedItems.includes(item.id) && 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950'
-              )}
-            >
-              <div className="flex items-center gap-4">
-                <Checkbox
-                  checked={selectedItems.includes(item.id)}
-                  onCheckedChange={() => handleSelectItem(item.id)}
-                />
-                <div className="w-16 h-16 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                  {item.type === 'video' ? (
-                    <Video className="w-6 h-6 text-zinc-500 dark:text-zinc-400" />
-                  ) : (
-                    <ImageIcon className="w-6 h-6 text-zinc-500 dark:text-zinc-400" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{item.name}</p>
-                  <div className="flex items-center gap-4 mt-1 flex-wrap">
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{(item.size / 1000).toFixed(1)} MB</span>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{item.date.toLocaleDateString()}</span>
-                    <Badge className="text-xs">{item.uses} uses</Badge>
-                  </div>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreVertical className="w-4 h-4" />
+        {view === 'grid' ? (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+            {filtered.map(item => (
+              <MediaCard key={item.id} item={item} selected={selected.has(item.id)} onSelect={() => toggleSelect(item.id)} />
+            ))}
+          </div>
+        ) : (
+          <Card className="bg-card border-border shadow-sm overflow-hidden">
+            <div className="divide-y divide-border">
+              {filtered.map(item => {
+                const Icon = item.type === 'video' ? Video : item.type === 'gif' ? FileImage : ImageIcon
+                return (
+                  <div key={item.id} onClick={() => toggleSelect(item.id)}
+                    className={cn('flex items-center gap-3 px-4 py-3 hover:bg-muted/20 cursor-pointer transition-colors',
+                      selected.has(item.id) && 'bg-accent/5')}>
+                    <div className="w-8 h-8 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-4 h-4 text-muted-foreground/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{item.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{item.folder} · {item.tags.slice(0, 2).join(', ')}</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-muted-foreground">{formatSize(item.size)}</span>
+                    <Badge className="text-[10px] border-0 bg-muted text-muted-foreground">{item.type}</Badge>
+                    <span className="text-[10px] text-muted-foreground hidden lg:block">{item.usedInPosts} posts</span>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground">
+                      <MoreVertical className="w-3.5 h-3.5" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>Download</DropdownMenuItem>
-                    <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Bulk Actions */}
-      {selectedItems.length > 0 && (
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-emerald-50 dark:bg-emerald-950 sticky bottom-0">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
-              {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''} selected
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setSelectedItems([])}>
-                Clear
-              </Button>
-              <Button variant="outline" size="sm" className="text-red-600 dark:text-red-400 border-red-300 dark:border-red-700">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
-              <Button size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Download
-              </Button>
+                  </div>
+                )
+              })}
             </div>
-          </div>
-        </Card>
-      )}
+          </Card>
+        )}
+      </div>
     </div>
   )
 }

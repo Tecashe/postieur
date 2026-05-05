@@ -166,7 +166,7 @@ export default function ComposePage() {
 
             <TabsContent value="queue" className="space-y-4 mt-4">
               <p className="text-sm text-zinc-600 dark:text-zinc-400">Add to publishing queue</p>
-              <Button className="w-full" variant="outline" className="border-zinc-200 dark:border-zinc-700" disabled={selectedChannels.length === 0}>
+              <Button className="w-full border-zinc-200 dark:border-zinc-700" variant="outline" disabled={selectedChannels.length === 0}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add to Queue
               </Button>

@@ -38,7 +38,7 @@ export function Platforms() {
                 className="p-6 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-900 flex flex-col items-center justify-center text-center hover:border-emerald-200 dark:hover:border-emerald-900 transition-colors"
               >
                 <Icon className="w-8 h-8 text-zinc-900 dark:text-white mb-3" />
-                <p className="text-sm font-medium text-zinc-900 dark:text-white">{platform.label}</p>
+                <p className="text-sm font-medium text-zinc-900 dark:text-white">{platform.name}</p>
               </motion.div>
             )
           })}

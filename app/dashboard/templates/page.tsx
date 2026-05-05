@@ -1,298 +1,121 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Search, Grid3x3, List, Star, Trash2, Copy, Edit2, Eye, MoreVertical } from 'lucide-react'
+import { Search, Plus, Copy, Edit3, Trash2, Tag } from 'lucide-react'
+import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import type { Platform } from '@/lib/types'
 
-const TEMPLATES = [
+const MOCK_TEMPLATES = [
   {
-    id: '1',
-    name: 'Monday Motivation',
-    description: 'Inspirational quote with morning routine',
-    category: 'Motivation',
-    platforms: ['Instagram', 'LinkedIn'],
-    content: 'Start your week strong! 💪 What\'s your #1 goal this week?',
-    usedCount: 24,
-    lastUsed: '2024-05-02',
-    starred: true,
+    id: '1', name: 'Product Launch', category: 'Marketing',
+    content: '🚀 Exciting news! We are launching {product_name} — the {adjective} solution for {target_audience}. {cta}',
+    platforms: ['instagram', 'linkedin', 'x'] as Platform[],
+    usageCount: 24, tags: ['launch', 'product', 'announcement'],
   },
   {
-    id: '2',
-    name: 'Product Launch',
-    description: 'Announcement template for new features',
-    category: 'Product',
-    platforms: ['Twitter', 'LinkedIn', 'Instagram'],
-    content: 'We\'re excited to announce... 🚀',
-    usedCount: 8,
-    lastUsed: '2024-04-28',
-    starred: false,
+    id: '2', name: 'Weekly Tip', category: 'Education',
+    content: '💡 This week\'s tip: {tip_content}\n\nSave this for later! What\'s your biggest challenge with {topic}? Let us know below. 👇',
+    platforms: ['instagram', 'facebook', 'linkedin'] as Platform[],
+    usageCount: 18, tags: ['tip', 'education', 'engagement'],
   },
   {
-    id: '3',
-    name: 'Friday Freebie',
-    description: 'Giveaway and community engagement',
-    category: 'Engagement',
-    platforms: ['Instagram', 'TikTok'],
-    content: 'It\'s Friday giveaway time! 🎁 RT to enter...',
-    usedCount: 15,
-    lastUsed: '2024-05-03',
-    starred: true,
+    id: '3', name: 'Behind the Scenes', category: 'Brand',
+    content: 'Take a peek behind the curtain at {company}! 🎬\n\n{bts_description}\n\nDrop a ❤️ if you love seeing how the magic happens!',
+    platforms: ['instagram', 'tiktok'] as Platform[],
+    usageCount: 11, tags: ['bts', 'brand', 'authentic'],
   },
   {
-    id: '4',
-    name: 'Blog Post Promo',
-    description: 'Article sharing with callout',
-    category: 'Content',
-    platforms: ['LinkedIn', 'Twitter'],
-    content: 'New article on the blog: [Link] Check it out!',
-    usedCount: 32,
-    lastUsed: '2024-05-01',
-    starred: false,
+    id: '4', name: 'Testimonial Highlight', category: 'Social Proof',
+    content: '⭐ "{testimonial_quote}" — {customer_name}, {customer_title}\n\nJoin {number}+ happy customers. {cta}',
+    platforms: ['instagram', 'linkedin', 'facebook', 'x'] as Platform[],
+    usageCount: 32, tags: ['testimonial', 'social-proof'],
   },
   {
-    id: '5',
-    name: 'User Spotlight',
-    description: 'Feature customer success story',
-    category: 'Social Proof',
-    platforms: ['Instagram', 'LinkedIn'],
-    content: 'Spotlight on one of our amazing customers...',
-    usedCount: 12,
-    lastUsed: '2024-04-25',
-    starred: true,
+    id: '5', name: 'Q&A Thread', category: 'Engagement',
+    content: 'I get asked "{question}" a lot. Here\'s my honest answer 🧵\n\n1/ {answer_start}',
+    platforms: ['x', 'threads'] as Platform[],
+    usageCount: 7, tags: ['thread', 'qa', 'engagement'],
   },
   {
-    id: '6',
-    name: 'Webinar Sign-up',
-    description: 'Educational event promotion',
-    category: 'Events',
-    platforms: ['LinkedIn', 'Facebook'],
-    content: 'Join us for an exclusive webinar! 📺 [Register]',
-    usedCount: 7,
-    lastUsed: '2024-04-20',
-    starred: false,
+    id: '6', name: 'Industry News', category: 'Thought Leadership',
+    content: '📰 Big news in {industry}: {news_headline}\n\nHere\'s what this means for {audience}: {analysis}\n\nThoughts? 👇',
+    platforms: ['linkedin', 'x'] as Platform[],
+    usageCount: 15, tags: ['news', 'thought-leadership'],
   },
 ]
 
-const CATEGORIES = ['All', 'Motivation', 'Product', 'Engagement', 'Content', 'Social Proof', 'Events']
+const CATEGORIES = ['All', ...Array.from(new Set(MOCK_TEMPLATES.map(t => t.category)))]
 
 export default function TemplatesPage() {
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [selectedCategory, setSelectedCategory] = useState('All')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showStarredOnly, setShowStarredOnly] = useState(false)
+  const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('All')
 
-  const filteredTemplates = TEMPLATES.filter(t => {
-    const matchesCategory = selectedCategory === 'All' || t.category === selectedCategory
-    const matchesSearch = t.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         t.description.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStarred = !showStarredOnly || t.starred
-    return matchesCategory && matchesSearch && matchesStarred
-  })
+  const filtered = MOCK_TEMPLATES.filter(t =>
+    (category === 'All' || t.category === category) &&
+    (!search || t.name.toLowerCase().includes(search.toLowerCase()) || t.content.toLowerCase().includes(search.toLowerCase()))
+  )
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light text-zinc-900 dark:text-white">Templates</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Create posts faster with reusable templates</p>
+    <div className="space-y-4 pb-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 max-w-sm min-w-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates..." className="pl-8 h-8 text-xs bg-input border-border" />
         </div>
-        <Button size="sm" className="text-xs sm:text-sm">
-          <Plus className="w-4 h-4 mr-2" />
-          New Template
-        </Button>
+        <div className="flex gap-1.5 flex-wrap">
+          {CATEGORIES.map(cat => (
+            <button key={cat} onClick={() => setCategory(cat)}
+              className={cn('px-3 py-1.5 text-xs rounded-sm border transition-all',
+                category === cat ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
+              {cat}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" className="gap-1.5 text-xs ml-auto"><Plus className="w-3.5 h-3.5" /> New Template</Button>
       </div>
 
-      {/* Filters & Search */}
-      <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <div className="space-y-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-zinc-400" />
-            <Input
-              placeholder="Search templates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-            />
-          </div>
-
-          {/* Categories */}
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map(cat => (
-              <Button
-                key={cat}
-                variant={selectedCategory === cat ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategory(cat)}
-                className="text-xs"
-              >
-                {cat}
-              </Button>
-            ))}
-          </div>
-
-          {/* View Controls */}
-          <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800">
-            <div className="text-xs text-zinc-600 dark:text-zinc-400">
-              {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {filtered.map(tpl => (
+          <Card key={tpl.id} className="bg-card border-border shadow-sm p-4 flex flex-col hover:border-border transition-all group">
+            <div className="flex items-start gap-2 mb-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-foreground truncate">{tpl.name}</p>
+                <Badge className="mt-0.5 text-[10px] border-0 bg-accent/10 text-accent">{tpl.category}</Badge>
+              </div>
+              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"><Copy className="w-3 h-3" /></Button>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"><Edit3 className="w-3 h-3" /></Button>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"><Trash2 className="w-3 h-3" /></Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant={showStarredOnly ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setShowStarredOnly(!showStarredOnly)}
-                className="h-8 w-8 p-0"
-                title={showStarredOnly ? 'Show all' : 'Show starred'}
-              >
-                <Star className="w-4 h-4" fill="currentColor" />
-              </Button>
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="h-8 w-8 p-0"
-              >
-                <Grid3x3 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="h-8 w-8 p-0"
-              >
-                <List className="w-4 h-4" />
-              </Button>
+
+            <p className="text-[11px] text-muted-foreground line-clamp-3 leading-relaxed flex-1 font-mono bg-muted/30 rounded-sm p-2">{tpl.content}</p>
+
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+              <div className="flex gap-0.5 flex-1">
+                {tpl.platforms.slice(0, 4).map(p => {
+                  const Icon = PLATFORMS[p]?.icon
+                  return Icon ? <Icon key={p} className="w-3 h-3 text-muted-foreground/50" /> : null
+                })}
+              </div>
+              <span className="text-[10px] text-muted-foreground">{tpl.usageCount} uses</span>
             </div>
-          </div>
-        </div>
-      </Card>
 
-      {/* Templates Grid */}
-      {viewMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTemplates.map(template => (
-            <Card key={template.id} className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors flex flex-col">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="font-medium text-sm text-zinc-900 dark:text-white">{template.name}</h3>
-                  <Badge variant="outline" className="mt-2 text-xs">{template.category}</Badge>
-                </div>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0">
-                  <Star className={cn('w-4 h-4', template.starred ? 'fill-emerald-500 text-emerald-500' : 'text-zinc-400')} />
-                </Button>
-              </div>
-
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-3">{template.description}</p>
-              
-              <div className="bg-zinc-50 dark:bg-zinc-800 p-3 rounded-lg mb-3 flex-1">
-                <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-3">{template.content}</p>
-              </div>
-
-              <div className="flex flex-wrap gap-1 mb-3">
-                {template.platforms.map(p => (
-                  <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>
-                ))}
-              </div>
-
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-3 pb-3 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-                Used {template.usedCount} times • Last used {new Date(template.lastUsed).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 text-xs h-8">
-                  <Copy className="w-3 h-3 mr-1" />
-                  Use
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Eye className="w-4 h-4 mr-2" />
-                      Preview
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Edit2 className="w-4 h-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600 dark:text-red-400">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Templates List */}
-      {viewMode === 'list' && (
-        <div className="space-y-2">
-          {filteredTemplates.map(template => (
-            <Card key={template.id} className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-medium text-sm text-zinc-900 dark:text-white">{template.name}</h3>
-                    {template.starred && <Star className="w-4 h-4 fill-emerald-500 text-emerald-500 flex-shrink-0" />}
-                  </div>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-2">{template.description}</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="text-xs">{template.category}</Badge>
-                    {template.platforms.map(p => (
-                      <span key={p} className="text-xs text-zinc-500 dark:text-zinc-400">{p}</span>
-                    ))}
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">• Used {template.usedCount}x</span>
-                  </div>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <Button variant="outline" size="sm" className="text-xs h-8">
-                    <Copy className="w-3 h-3 mr-1" />
-                    Use
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
-                        <Eye className="w-4 h-4 mr-2" />
-                        Preview
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Edit2 className="w-4 h-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600 dark:text-red-400">
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+            <div className="flex flex-wrap gap-1 mt-2">
+              {tpl.tags.slice(0, 3).map(tag => (
+                <span key={tag} className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground/60 bg-muted/40 px-1.5 py-0.5 rounded-sm">
+                  <Tag className="w-2 h-2" />{tag}
+                </span>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   )
 }

@@ -1,266 +1,172 @@
-'use client'
+﻿'use client'
 
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Bell, Lock, Users, CreditCard, Trash2, Download } from 'lucide-react'
+import { AlertTriangle, Bell, Globe, CreditCard, Trash2, Check } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+const TIMEZONES = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney']
 
 export default function SettingsPage() {
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-light text-zinc-900 dark:text-white">Settings</h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Manage your workspace and preferences</p>
-      </div>
+  const [saved, setSaved] = useState(false)
 
-      <Tabs defaultValue="workspace" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800">
-          <TabsTrigger value="workspace">Workspace</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
+  const handleSave = () => {
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5 pb-6">
+      <Tabs defaultValue="workspace">
+        <TabsList className="bg-muted border border-border h-9 p-1 gap-0.5">
+          {[['workspace','Workspace'], ['notifications','Notifications'], ['timezone','Date & Time'], ['billing','Billing']].map(([v, l]) => (
+            <TabsTrigger key={v} value={v} className="text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">{l}</TabsTrigger>
+          ))}
         </TabsList>
 
-        {/* Workspace Settings */}
-        <TabsContent value="workspace" className="space-y-6">
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Workspace Information</h3>
-            <div className="space-y-6">
+        {/* Workspace */}
+        <TabsContent value="workspace" className="mt-5 space-y-4">
+          <Card className="bg-card border-border shadow-sm p-5 space-y-4">
+            <h3 className="text-sm font-medium text-foreground">Workspace Details</h3>
+            <div className="space-y-3">
               <div>
-                <Label htmlFor="workspace-name" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  Workspace Name
-                </Label>
-                <Input
-                  id="workspace-name"
-                  defaultValue="Company Pro"
-                  className="mt-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                />
+                <Label className="text-xs">Workspace Name</Label>
+                <Input defaultValue="My Workspace" className="mt-1 h-8 text-xs bg-input border-border" />
               </div>
-
               <div>
-                <Label htmlFor="workspace-description" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  Description
-                </Label>
-                <Textarea
-                  id="workspace-description"
-                  defaultValue="A premier social media management platform for brands"
-                  className="mt-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white min-h-24 resize-none"
-                />
+                <Label className="text-xs">Workspace URL</Label>
+                <div className="flex gap-2 mt-1">
+                  <span className="flex items-center text-xs text-muted-foreground bg-muted px-3 rounded-sm border border-border">caelpost.com/</span>
+                  <Input defaultValue="my-workspace" className="flex-1 h-8 text-xs bg-input border-border" />
+                </div>
               </div>
-
               <div>
-                <Label htmlFor="workspace-url" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  Workspace URL
-                </Label>
-                <Input
-                  id="workspace-url"
-                  defaultValue="https://app.social.com/company-pro"
-                  disabled
-                  className="mt-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-                />
+                <Label className="text-xs">Description</Label>
+                <Input defaultValue="Social media management workspace" className="mt-1 h-8 text-xs bg-input border-border" />
               </div>
-
-              <div>
-                <Label htmlFor="workspace-timezone" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  Timezone
-                </Label>
-                <select
-                  id="workspace-timezone"
-                  defaultValue="america/newyork"
-                  className="mt-2 w-full px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm"
-                >
-                  <option value="america/newyork">Eastern Time (US & Canada)</option>
-                  <option value="america/chicago">Central Time (US & Canada)</option>
-                  <option value="america/denver">Mountain Time (US & Canada)</option>
-                  <option value="america/losangeles">Pacific Time (US & Canada)</option>
-                  <option value="europe/london">London</option>
-                  <option value="europe/paris">Paris</option>
-                </select>
-              </div>
-
-              <Button className="w-full sm:w-auto">Save Changes</Button>
             </div>
+            <Button size="sm" onClick={handleSave} className="text-xs gap-1.5">
+              {saved ? <><Check className="w-3.5 h-3.5" /> Saved</> : 'Save Changes'}
+            </Button>
           </Card>
 
-          {/* Danger Zone */}
-          <Card className="p-4 sm:p-6 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950">
-            <h3 className="text-lg font-light text-red-900 dark:text-red-100 mb-4">Danger Zone</h3>
-            <p className="text-sm text-red-800 dark:text-red-200 mb-4">
-              Deleting your workspace cannot be undone. All data will be permanently removed.
-            </p>
-            <Button variant="outline" className="border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Workspace
+          <Card className="bg-destructive/5 border-destructive/20 shadow-sm p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-destructive" />
+              <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">Permanently delete this workspace and all its data. This action cannot be undone.</p>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/5">
+              <Trash2 className="w-3.5 h-3.5" /> Delete Workspace
             </Button>
           </Card>
         </TabsContent>
 
-        {/* Notification Settings */}
-        <TabsContent value="notifications" className="space-y-6">
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Notification Preferences</h3>
-            <div className="space-y-4">
-              {[
-                { label: 'Post Published', description: 'When your posts go live', enabled: true },
-                { label: 'Comments & Replies', description: 'New engagement on your posts', enabled: true },
-                { label: 'Weekly Digest', description: 'Summary of performance metrics', enabled: true },
-                { label: 'Team Mentions', description: 'When someone mentions you', enabled: false },
-                { label: 'System Updates', description: 'Important product updates', enabled: true },
-                { label: 'Account Changes', description: 'Login alerts and security notices', enabled: true },
-              ].map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{item.label}</p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">{item.description}</p>
-                  </div>
-                  <Switch defaultChecked={item.enabled} />
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Email Frequency</h3>
-            <div className="space-y-3">
-              {['Instantly', 'Daily Digest', 'Weekly Digest'].map((option) => (
-                <label key={option} className="flex items-center gap-3 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                  <input type="radio" name="frequency" defaultChecked={option === 'Daily Digest'} className="w-4 h-4" />
-                  <span className="text-sm font-medium text-zinc-900 dark:text-white">{option}</span>
-                </label>
-              ))}
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* Billing Settings */}
-        <TabsContent value="billing" className="space-y-6">
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Current Plan</h3>
-            <div className="p-4 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950">
-              <div className="flex items-center justify-between">
+        {/* Notifications */}
+        <TabsContent value="notifications" className="mt-5">
+          <Card className="bg-card border-border shadow-sm p-5 space-y-1">
+            <h3 className="text-sm font-medium text-foreground mb-4">Notification Preferences</h3>
+            {[
+              ['Post Published', 'When a scheduled post goes live'],
+              ['Post Failed', 'When a post fails to publish'],
+              ['New Comment', 'When someone comments on your post'],
+              ['New Mention', 'When your account is mentioned'],
+              ['Weekly Report', 'Weekly analytics summary via email'],
+              ['Team Activity', 'When team members make changes'],
+              ['Queue Empty', 'When your posting queue runs low'],
+            ].map(([label, desc]) => (
+              <div key={label} className="flex items-center justify-between py-3 border-b border-border last:border-0">
                 <div>
-                  <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Pro Plan</p>
-                  <p className="text-xs text-emerald-800 dark:text-emerald-200 mt-1">Billed monthly • Renews May 15, 2024</p>
+                  <p className="text-xs font-medium text-foreground">{label}</p>
+                  <p className="text-[11px] text-muted-foreground">{desc}</p>
                 </div>
-                <Badge className="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200">
-                  Active
-                </Badge>
+                <Switch defaultChecked className="scale-90" />
               </div>
-              <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
-                <span className="text-sm text-emerald-900 dark:text-emerald-100 font-medium">$49/month</span>
-                <Button size="sm" variant="outline" className="border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-200">
-                  Manage Subscription
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Billing History</h3>
-            <div className="space-y-2">
-              {[
-                { date: 'April 15, 2024', amount: '$49.00', status: 'Paid' },
-                { date: 'March 15, 2024', amount: '$49.00', status: 'Paid' },
-                { date: 'February 15, 2024', amount: '$49.00', status: 'Paid' },
-                { date: 'January 15, 2024', amount: '$49.00', status: 'Paid' },
-              ].map((invoice, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{invoice.date}</p>
-                  </div>
-                  <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200">{invoice.status}</Badge>
-                  <span className="text-sm font-medium text-zinc-900 dark:text-white ml-4">{invoice.amount}</span>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-2">
-                    <Download className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+            ))}
           </Card>
         </TabsContent>
 
-        {/* Security Settings */}
-        <TabsContent value="security" className="space-y-6">
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Password</h3>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="current-password" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  Current Password
-                </Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  className="mt-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-                />
-              </div>
-              <div>
-                <Label htmlFor="new-password" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  New Password
-                </Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  className="mt-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-                />
-              </div>
-              <div>
-                <Label htmlFor="confirm-password" className="text-sm font-medium text-zinc-900 dark:text-white">
-                  Confirm Password
-                </Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  className="mt-2 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
-                />
-              </div>
-              <Button className="w-full sm:w-auto">Update Password</Button>
+        {/* Date & Time */}
+        <TabsContent value="timezone" className="mt-5">
+          <Card className="bg-card border-border shadow-sm p-5 space-y-4">
+            <h3 className="text-sm font-medium text-foreground">Date & Time</h3>
+            <div>
+              <Label className="text-xs">Timezone</Label>
+              <select defaultValue="UTC" className="mt-1 w-full h-8 px-3 text-xs bg-input border border-border rounded-sm text-foreground outline-none focus:ring-1 focus:ring-ring">
+                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
             </div>
+            <div>
+              <Label className="text-xs">Date Format</Label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {['MMM D, YYYY', 'DD/MM/YYYY', 'MM/DD/YYYY'].map(fmt => (
+                  <button key={fmt} className="h-8 px-3 text-xs border border-border rounded-sm text-muted-foreground hover:border-accent/40 hover:text-foreground transition-all">
+                    {fmt}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Week Starts On</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {['Monday', 'Sunday'].map(day => (
+                  <button key={day} className="h-8 px-3 text-xs border border-border rounded-sm text-muted-foreground hover:border-accent/40 hover:text-foreground transition-all">
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button size="sm" onClick={handleSave} className="text-xs gap-1.5">
+              {saved ? <><Check className="w-3.5 h-3.5" /> Saved</> : 'Save Changes'}
+            </Button>
           </Card>
+        </TabsContent>
 
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
-              <Lock className="w-5 h-5" />
-              Two-Factor Authentication
-            </h3>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-              Add an extra layer of security to your account with two-factor authentication
-            </p>
-            <Button>Enable 2FA</Button>
-          </Card>
-
-          <Card className="p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <h3 className="text-lg font-light text-zinc-900 dark:text-white mb-6">Active Sessions</h3>
-            <div className="space-y-3">
-              {[
-                { device: 'Chrome on macOS', location: 'San Francisco, CA', lastActive: 'Just now', current: true },
-                { device: 'Safari on iPhone', location: 'San Francisco, CA', lastActive: '2 hours ago' },
-              ].map((session, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{session.device}</p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">
-                      {session.location} • Last active: {session.lastActive}
-                    </p>
-                  </div>
-                  {session.current && (
-                    <Badge className="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200">
-                      Current
-                    </Badge>
-                  )}
-                  {!session.current && (
-                    <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400">
-                      Sign Out
-                    </Button>
-                  )}
+        {/* Billing */}
+        <TabsContent value="billing" className="mt-5 space-y-4">
+          <Card className="bg-primary/5 border-primary/20 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium">Current Plan</p>
+                <p className="text-xl font-light text-foreground mt-0.5">Pro Plan</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-light text-primary">$49</p>
+                <p className="text-xs text-muted-foreground">/month</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[['25', 'Channels'], ['Unlimited', 'Posts/mo'], ['5', 'Team seats']].map(([v, l]) => (
+                <div key={l} className="bg-card rounded-sm p-2 text-center">
+                  <p className="text-sm font-medium text-foreground">{v}</p>
+                  <p className="text-[10px] text-muted-foreground">{l}</p>
                 </div>
               ))}
+            </div>
+            <Button variant="outline" size="sm" className="text-xs border-primary/30 text-primary hover:bg-primary/5">Upgrade to Agency</Button>
+          </Card>
+          <Card className="bg-card border-border shadow-sm p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium text-foreground">Payment Method</h3>
+            </div>
+            <div className="flex items-center justify-between p-3 border border-border rounded-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-6 bg-muted rounded flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-foreground">VISA</span>
+                </div>
+                <div>
+                  <p className="text-xs text-foreground">•••• •••• •••• 4242</p>
+                  <p className="text-[10px] text-muted-foreground">Expires 12/26</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">Change</Button>
             </div>
           </Card>
         </TabsContent>

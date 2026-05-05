@@ -1,187 +1,156 @@
-'use client'
+﻿'use client'
 
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Plus, MoreVertical, CheckCircle2, AlertCircle, TrendingUp, Users, Activity } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import {
+  Plus, Search, Settings, CheckCircle2, AlertCircle, XCircle,
+  Users, BarChart3, RefreshCw, ExternalLink, Trash2,
+} from 'lucide-react'
 import { MOCK_CHANNELS } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import type { Channel, Platform } from '@/lib/types'
+
+const PLATFORM_GROUPS: { label: string; platforms: Platform[] }[] = [
+  { label: 'Social', platforms: ['instagram', 'facebook', 'threads', 'snapchat', 'tiktok', 'pinterest'] },
+  { label: 'Professional', platforms: ['linkedin'] },
+  { label: 'Micro-blogging', platforms: ['x', 'bluesky', 'mastodon', 'nostr', 'warpcast'] },
+  { label: 'Video', platforms: ['youtube', 'twitch'] },
+  { label: 'Community', platforms: ['discord', 'reddit', 'telegram', 'slack'] },
+  { label: 'Publishing', platforms: ['medium', 'devto', 'hashnode', 'wordpress'] },
+  { label: 'Other', platforms: ['dribbble', 'vk'] },
+]
+
+function HealthIndicator({ health }: { health?: string }) {
+  if (health === 'good') return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+  if (health === 'warning') return <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+  return <XCircle className="w-3.5 h-3.5 text-destructive" />
+}
 
 export default function ChannelsPage() {
-  const connectedChannels = MOCK_CHANNELS.filter(c => c.isConnected)
-  const activeChannels = connectedChannels.filter(c => c.live)
-  
+  const [search, setSearch] = useState('')
+  const connected = MOCK_CHANNELS.filter(c => c.isConnected)
+  const searchFiltered = connected.filter(c =>
+    !search || c.handle.toLowerCase().includes(search.toLowerCase()) ||
+    c.platform.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light text-zinc-900 dark:text-white">Channels</h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">Manage connected social media accounts</p>
-        </div>
-        <Button size="sm" className="text-xs sm:text-sm w-full sm:w-auto">
-          <Plus className="w-4 h-4 mr-2" />
-          Connect Channel
-        </Button>
-      </div>
-
+    <div className="space-y-6 pb-6">
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">Connected</p>
-              <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">{connectedChannels.length}</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">of {MOCK_CHANNELS.length} total</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Connected', value: connected.length, icon: CheckCircle2, accent: true },
+          { label: 'Total Followers', value: connected.reduce((s, c) => s + c.followers, 0).toLocaleString(), icon: Users },
+          { label: 'Posts This Month', value: connected.reduce((s, c) => s + (c.postsThisMonth ?? 0), 0), icon: BarChart3 },
+          { label: 'Health Issues', value: connected.filter(c => c.health !== 'good').length, icon: AlertCircle },
+        ].map(s => (
+          <Card key={s.label} className={cn('bg-card border-border shadow-sm p-4', s.accent && 'border-accent/30 bg-accent/5')}>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">{s.label}</p>
+              <s.icon className={cn('w-3.5 h-3.5', s.accent ? 'text-accent' : 'text-muted-foreground')} />
             </div>
-            <CheckCircle2 className="w-10 h-10 text-emerald-500 flex-shrink-0" />
-          </div>
-        </Card>
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">Active Now</p>
-              <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">{activeChannels.length}</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Posting available</p>
-            </div>
-            <Activity className="w-10 h-10 text-emerald-500 flex-shrink-0" />
-          </div>
-        </Card>
-        <Card className="p-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 font-medium">Total Followers</p>
-              <p className="text-2xl sm:text-3xl font-light text-zinc-900 dark:text-white mt-2">
-                {(connectedChannels.reduce((sum, c) => sum + c.followers, 0) / 1000).toFixed(0)}K
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Combined reach</p>
-            </div>
-            <Users className="w-10 h-10 text-emerald-500 flex-shrink-0" />
-          </div>
-        </Card>
+            <p className={cn('text-2xl font-light', s.accent ? 'text-accent' : 'text-foreground')}>{s.value}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* Channels List */}
-      <div className="space-y-3">
-        {MOCK_CHANNELS.map((channel) => {
-          const platform = PLATFORMS[channel.platform]
-          const Icon = platform.icon
-          
-          return (
-            <Card 
-              key={channel.id}
-              className={cn(
-                'p-4 sm:p-6 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors',
-                !channel.isConnected && 'opacity-75'
-              )}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                {/* Platform Icon */}
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-6 h-6 text-zinc-600 dark:text-zinc-400" />
+      {/* Connected channels */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search channels..." className="pl-8 h-8 text-xs bg-input border-border" />
+          </div>
+          <div className="flex-1" />
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs border-border"><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {searchFiltered.map(ch => {
+            const plat = PLATFORMS[ch.platform]
+            const Icon = plat.icon
+            return (
+              <Card key={ch.id} className="bg-card border-border shadow-sm p-4 hover:border-border transition-all">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-9 h-9 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  
-                  {/* Channel Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm sm:text-base font-medium text-zinc-900 dark:text-white">{channel.handle}</h3>
-                      {channel.live && (
-                        <Badge className="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200 text-xs flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          Live
-                        </Badge>
-                      )}
-                      {!channel.isConnected && (
-                        <Badge variant="outline" className="border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-200 text-xs">
-                          <AlertCircle className="w-3 h-3 mr-1" />
-                          Disconnected
-                        </Badge>
-                      )}
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <h3 className="text-xs font-medium text-foreground truncate">{ch.handle}</h3>
+                      {ch.live && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />}
                     </div>
-                    <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 mt-1">{platform.label}</p>
+                    <p className="text-[10px] text-muted-foreground">{plat.name}</p>
+                  </div>
+                  <HealthIndicator health={ch.health} />
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="bg-muted/40 rounded-sm p-2">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Followers</p>
+                    <p className="text-sm font-medium text-foreground">{ch.followers.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-muted/40 rounded-sm p-2">
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Posts / mo</p>
+                    <p className="text-sm font-medium text-foreground">{ch.postsThisMonth ?? 0}</p>
                   </div>
                 </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 sm:flex sm:gap-6 gap-3 flex-shrink-0">
-                  <div className="text-xs sm:text-sm">
-                    <p className="text-zinc-600 dark:text-zinc-400 font-medium">Followers</p>
-                    <p className="text-lg sm:text-xl font-light text-zinc-900 dark:text-white mt-1">
-                      {(channel.followers / 1000).toFixed(0)}K
-                    </p>
-                  </div>
-                  <div className="text-xs sm:text-sm">
-                    <p className="text-zinc-600 dark:text-zinc-400 font-medium">Posts</p>
-                    <p className="text-lg sm:text-xl font-light text-zinc-900 dark:text-white mt-1">
-                      {Math.floor(Math.random() * 100) + 50}
-                    </p>
-                  </div>
-                  <div className="text-xs sm:text-sm">
-                    <p className="text-zinc-600 dark:text-zinc-400 font-medium">Engagement</p>
-                    <p className="text-lg sm:text-xl font-light text-zinc-900 dark:text-white mt-1 flex items-center gap-1">
-                      {(Math.random() * 10 + 2).toFixed(1)}%
-                      <TrendingUp className="w-3 h-3 text-emerald-500" />
-                    </p>
-                  </div>
+                <div className="flex gap-1.5">
+                  <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] border-border gap-1">
+                    <Settings className="w-3 h-3" /> Settings
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 flex-shrink-0 w-full sm:w-auto">
-                  {channel.isConnected ? (
-                    <>
-                      <Button variant="outline" size="sm" className="flex-1 sm:flex-none text-xs sm:text-sm">
-                        Settings
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>View Analytics</DropdownMenuItem>
-                          <DropdownMenuItem>Edit Settings</DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600">Disconnect</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </>
-                  ) : (
-                    <Button size="sm" className="flex-1 sm:flex-none text-xs sm:text-sm">
-                      Reconnect
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )
-        })}
+              </Card>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Disconnected Channels */}
-      {MOCK_CHANNELS.filter(c => !c.isConnected).length > 0 && (
-        <Card className="p-4 sm:p-6 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Disconnected Channels</h3>
-              <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-200 mt-1">
-                {MOCK_CHANNELS.filter(c => !c.isConnected).length} channel{MOCK_CHANNELS.filter(c => !c.isConnected).length !== 1 ? 's' : ''} need to be reconnected to continue posting.
-              </p>
-              <Button size="sm" variant="outline" className="mt-3 text-amber-900 dark:text-amber-100 border-amber-300 dark:border-amber-700 text-xs">
-                Reconnect All
-              </Button>
+      {/* Connect new */}
+      <div>
+        <h2 className="text-sm font-medium text-foreground mb-4">Connect a Platform</h2>
+        <div className="space-y-5">
+          {PLATFORM_GROUPS.map(group => (
+            <div key={group.label}>
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest mb-2">{group.label}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {group.platforms.map(platform => {
+                  const plat = PLATFORMS[platform]
+                  const Icon = plat?.icon
+                  const alreadyConnected = connected.some(c => c.platform === platform)
+                  return (
+                    <button
+                      key={platform}
+                      disabled={alreadyConnected}
+                      className={cn(
+                        'flex flex-col items-center gap-2 p-3 rounded-sm border text-center transition-all',
+                        alreadyConnected
+                          ? 'border-emerald-500/20 bg-emerald-500/5 cursor-default'
+                          : 'border-border hover:border-accent/40 hover:bg-accent/5 cursor-pointer'
+                      )}
+                    >
+                      {Icon && <Icon className="w-5 h-5 text-muted-foreground" />}
+                      <span className="text-[10px] text-muted-foreground">{plat?.name}</span>
+                      {alreadyConnected ? (
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <Plus className="w-3 h-3 text-muted-foreground/40" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        </Card>
-      )}
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,5 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma 7 schema — connection URL is in prisma.config.ts
 
 generator client {
   provider = "prisma-client-js"
@@ -9,20 +8,30 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── Enums ─────────────────────────────────────────────────────────────────
+// --- Enums ---
 
-enum Role {
-  OWNER
-  ADMIN
-  EDITOR
-  VIEWER
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
 }
 
-enum InvitationStatus {
-  PENDING
-  ACCEPTED
-  EXPIRED
-  REVOKED
+enum PostType {
+  POST
+  THREAD
+  CAROUSEL
+  REEL
+  STORY
+  ARTICLE
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  GIF
+  DOCUMENT
 }
 
 enum Plan {
@@ -31,127 +40,156 @@ enum Plan {
   AGENCY
 }
 
-enum PostStatus {
-  DRAFT
-  SCHEDULED
-  PUBLISHED
-  FAILED
-}
-
-// ─── User ──────────────────────────────────────────────────────────────────
-
-model User {
-  id        String   @id // Clerk userId (e.g. user_2abc...)
-  email     String   @unique
-  name      String
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  memberships WorkspaceMember[]
-  invitesSent Invitation[]      @relation("InvitedBy")
-
-  @@map("users")
-}
-
-// ─── Workspace ─────────────────────────────────────────────────────────────
+// --- Workspace ---
 
 model Workspace {
   id          String   @id @default(cuid())
   name        String
   slug        String   @unique
-  clerkOrgId  String   @unique // Clerk organization ID
+  clerkOrgId  String   @unique
   plan        Plan     @default(FREE)
   logoUrl     String?
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  members     WorkspaceMember[]
-  invitations Invitation[]
-  channels    Channel[]
-  posts       Post[]
+  channels   Channel[]
+  posts      Post[]
+  mediaItems MediaItem[]
+  aiUsage    AIUsageLog[]
 
   @@map("workspaces")
 }
 
-// ─── WorkspaceMember ────────────────────────────────────────────────────────
-
-model WorkspaceMember {
-  id          String    @id @default(cuid())
-  userId      String
-  workspaceId String
-  role        Role      @default(EDITOR)
-  joinedAt    DateTime  @default(now())
-
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, workspaceId])
-  @@map("workspace_members")
-}
-
-// ─── Invitation ─────────────────────────────────────────────────────────────
-
-model Invitation {
-  id          String           @id @default(cuid())
-  email       String
-  workspaceId String
-  role        Role             @default(EDITOR)
-  status      InvitationStatus @default(PENDING)
-  token       String           @unique @default(cuid())
-  expiresAt   DateTime
-  acceptedAt  DateTime?
-  invitedById String?
-  createdAt   DateTime         @default(now())
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  invitedBy User?     @relation("InvitedBy", fields: [invitedById], references: [id])
-
-  @@map("invitations")
-}
-
-// ─── Channel ─────────────────────────────────────────────────────────────────
+// --- Channel ---
 
 model Channel {
-  id          String   @id @default(cuid())
-  workspaceId String
-  platform    String   // 'instagram' | 'x' | 'linkedin' | etc.
-  handle      String
-  displayName String?
-  avatarUrl   String?
-  accessToken String?  // encrypted in production
-  refreshToken String? // encrypted in production
-  tokenExpiry DateTime?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String    @id @default(cuid())
+  workspaceId  String
+  platform     String
+  handle       String
+  displayName  String?
+  avatarUrl    String?
+  accessToken  String?
+  refreshToken String?
+  tokenExpiry  DateTime?
+  isActive     Boolean   @default(true)
+  followers    Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  posts     Post[]
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  postChannels PostChannel[]
 
   @@unique([workspaceId, platform, handle])
   @@map("channels")
 }
 
-// ─── Post ─────────────────────────────────────────────────────────────────────
+// --- Post ---
 
 model Post {
-  id          String     @id @default(cuid())
-  workspaceId String
-  channelId   String?
-  content     String
-  mediaUrls   String[]   @default([])
-  status      PostStatus @default(DRAFT)
-  scheduledAt DateTime?
-  publishedAt DateTime?
-  failedAt    DateTime?
-  failReason  String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                    String     @id @default(cuid())
+  workspaceId           String
+  content               String
+  type                  PostType   @default(POST)
+  status                PostStatus @default(DRAFT)
+  scheduledAt           DateTime?
+  publishedAt           DateTime?
+  failedAt              DateTime?
+  failReason            String?
+  mediaUrls             String[]   @default([])
+  threadPosts           String[]   @default([])
+  labels                String[]   @default([])
+  campaignId            String?
+  crossPostDelayMinutes Int        @default(0)
+  createdById           String?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channels   PostChannel[]
+  analytics  PostAnalytics?
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledAt])
+  @@map("posts")
+}
+
+// --- PostChannel ---
+
+model PostChannel {
+  id             String     @id @default(cuid())
+  postId         String
+  channelId      String
+  status         PostStatus @default(SCHEDULED)
+  platformPostId String?
+  publishedAt    DateTime?
+  failReason     String?
+
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, channelId])
+  @@map("post_channels")
+}
+
+// --- PostAnalytics ---
+
+model PostAnalytics {
+  id          String   @id @default(cuid())
+  postId      String   @unique
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  saves       Int      @default(0)
+  reach       Int      @default(0)
+  syncedAt    DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("post_analytics")
+}
+
+// --- MediaItem ---
+
+model MediaItem {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  url          String
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  type         MediaType
+  width        Int?
+  height       Int?
+  duration     Float?
+  altText      String?
+  uploadedById String?
+  createdAt    DateTime  @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  channel   Channel?  @relation(fields: [channelId], references: [id])
 
-  @@map("posts")
+  @@index([workspaceId])
+  @@map("media_items")
+}
+
+// --- AIUsageLog ---
+
+model AIUsageLog {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  userId           String?
+  feature          String
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  cost             Float    @default(0)
+  createdAt        DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("ai_usage_logs")
 }

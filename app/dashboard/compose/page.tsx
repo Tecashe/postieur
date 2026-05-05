@@ -26,6 +26,8 @@ import { MOCK_CHANNELS, MOCK_SIGNATURES } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import type { Platform } from '@/lib/types'
 import { PlatformPreview } from '@/components/compose/platform-preview'
+import { createPost } from '@/lib/actions/posts'
+import { toast } from 'sonner'
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
@@ -120,14 +122,116 @@ export default function ComposePage() {
     ? Math.min(95, 42 + Math.floor(content.length / 8) + (selectedPlatforms.length * 5) + (enableSignature ? 8 : 0))
     : 0
 
-  const handleSimulateAI = () => {
-    setAiGenerating(true)
-    setTimeout(() => { setAiGenerating(false); setShowVariants(true) }, 1400)
+  const handleSimulateAI = () => handleAI('variants')
+
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSubmit = async (mode: 'now' | 'schedule' | 'queue') => {
+    if (selectedChannels.length === 0) return
+    const finalContent = postType === 'thread' ? threadPosts[0] : content
+    if (!finalContent.trim()) return
+
+    setIsSaving(true)
+    try {
+      let scheduledAt: string | null = null
+      if (mode === 'schedule' && scheduleDate && scheduleTime) {
+        scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
+      }
+
+      const result = await createPost({
+        content: finalContent,
+        type: postType.toUpperCase() as 'POST' | 'THREAD' | 'CAROUSEL',
+        status: mode === 'now' ? 'DRAFT' : 'SCHEDULED',
+        scheduledAt,
+        mediaUrls: mediaFiles,
+        threadPosts: postType === 'thread' ? threadPosts : [],
+        crossPostDelayMinutes: parseInt(crossPostDelay) || 0,
+        channelIds: selectedChannels,
+        labels: [],
+      })
+
+      if (result.success) {
+        toast.success(
+          mode === 'now' ? 'Post saved — publishing shortly'
+          : mode === 'queue' ? 'Added to queue'
+          : 'Post scheduled'
+        )
+        setContent('')
+        setThreadPosts([''])
+        setMediaFiles([])
+        setSelectedChannels([])
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save post')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleMediaAdd = () => {
-    setMediaFiles(prev => [...prev, `media-${prev.length + 1}.jpg`])
+  const handleAI = async (action: 'improve' | 'hashtags' | 'variants' | 'thread') => {
+    const currentContent = postType === 'thread' ? threadPosts[activeThreadIdx] : content
+    if (!currentContent.trim()) return
+    setAiGenerating(true)
+    try {
+      const res = await fetch('/api/ai/compose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          content: currentContent,
+          platform: activePlatform ?? 'default',
+          tone: selectedTone.toLowerCase(),
+        }),
+      })
+      const data = await res.json() as { result?: string; error?: string }
+      if (data.error) throw new Error(data.error)
+      if (action === 'improve' && data.result) {
+        if (postType === 'thread') {
+          const updated = [...threadPosts]
+          updated[activeThreadIdx] = data.result
+          setThreadPosts(updated)
+        } else {
+          setContent(data.result)
+        }
+        toast.success('Content improved')
+      } else if (action === 'hashtags' && data.result) {
+        setContent(prev => prev + '\n\n' + data.result)
+        toast.success('Hashtags added')
+      } else if (action === 'variants' && data.result) {
+        const variants = data.result
+          .split(/^\d+\./m)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0)
+          .slice(0, 3)
+        setAiVariants(variants)
+        setShowVariants(true)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'AI request failed')
+    } finally {
+      setAiGenerating(false)
+    }
   }
+
+  const handleMediaAdd = async (file?: File) => {
+    if (!file) {
+      // Fallback: open file picker
+      fileRef.current?.click()
+      return
+    }
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await fetch('/api/media', { method: 'POST', body: formData })
+      const data = await res.json() as { url?: string; error?: string }
+      if (data.error) throw new Error(data.error)
+      if (data.url) setMediaFiles(prev => [...prev, data.url!])
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    }
+  }
+
+  const [aiVariants, setAiVariants] = useState<string[]>([])
 
   return (
     <div className="space-y-5">
@@ -141,9 +245,14 @@ export default function ComposePage() {
           <Button variant="outline" size="sm" className="text-xs gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Load Draft
           </Button>
-          <Button size="sm" className="text-xs gap-1.5" disabled={selectedChannels.length === 0 || (!content && postType !== 'thread')}>
+          <Button
+            size="sm"
+            className="text-xs gap-1.5"
+            disabled={isSaving || selectedChannels.length === 0 || (!content && postType !== 'thread')}
+            onClick={() => handleSubmit(scheduleMode)}
+          >
             <Send className="w-3.5 h-3.5" />
-            {scheduleMode === 'now' ? 'Publish Now' : scheduleMode === 'queue' ? 'Add to Queue' : 'Schedule'}
+            {isSaving ? 'Saving…' : scheduleMode === 'now' ? 'Publish Now' : scheduleMode === 'queue' ? 'Add to Queue' : 'Schedule'}
           </Button>
         </div>
       </div>
@@ -255,7 +364,7 @@ export default function ComposePage() {
 
               {/* Toolbar */}
               <div className="flex items-center gap-1 px-3 py-2 border-t border-border bg-muted/20">
-                <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaAdd} />
+                <input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMediaAdd(f) }} />
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => fileRef.current?.click()}>
                   <ImageIcon className="w-3.5 h-3.5" />
                 </Button>
@@ -293,7 +402,7 @@ export default function ComposePage() {
                     </div>
                   ))}
                   <button
-                    onClick={handleMediaAdd}
+                    onClick={() => fileRef.current?.click()}
                     className="w-16 h-16 rounded-sm border border-dashed border-border hover:border-accent hover:bg-accent/5 flex items-center justify-center text-muted-foreground hover:text-accent transition-colors"
                   >
                     <Plus className="w-4 h-4" />
@@ -439,10 +548,10 @@ export default function ComposePage() {
                   </div>
                   {showVariants && (
                     <div className="space-y-2">
-                      {AI_VARIANTS.map((v, i) => (
+                      {(showVariants ? aiVariants : []).map((v, i) => (
                         <button
                           key={i}
-                          onClick={() => { setContent(v); setShowVariants(false) }}
+                          onClick={() => { setContent(v); setShowVariants(false); setAiVariants([]) }}
                           className="w-full text-left p-2.5 rounded-sm border border-border hover:border-accent/50 hover:bg-accent/5 transition-all text-xs text-muted-foreground hover:text-foreground group"
                         >
                           <span className="text-[10px] font-medium text-accent mr-1.5">V{i + 1}</span>

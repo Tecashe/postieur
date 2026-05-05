@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { MOCK_POSTS, MOCK_CHANNELS, MOCK_ACTIVITY } from '@/lib/mock-data'
+import { MOCK_ACTIVITY } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
 
 const WEEK_DATA = [
@@ -56,14 +56,21 @@ function StatCard({ label, value, change, trend, icon: Icon, accent }: {
 
 export default function DashboardPage() {
   const [chartView, setChartView] = useState<'eng' | 'reach'>('eng')
-  const published = MOCK_POSTS.filter(p => p.status === 'published')
-  const scheduled = MOCK_POSTS.filter(p => p.status === 'scheduled')
-  const drafts = MOCK_POSTS.filter(p => p.status === 'draft')
-  const totalLikes = published.reduce((s, p) => s + (p.engagement?.likes ?? 0), 0)
-  const totalComments = published.reduce((s, p) => s + (p.engagement?.comments ?? 0), 0)
-  const totalShares = published.reduce((s, p) => s + (p.engagement?.shares ?? 0), 0)
-  const connectedChannels = MOCK_CHANNELS.filter(c => c.isConnected)
-  const liveChannels = connectedChannels.filter(c => c.live)
+  type StatsData = {
+    totalPosts: number; scheduled: number; published: number; failed: number
+    scheduledPosts: Array<{ id: string; content: string; scheduledAt: string | null; channels: Array<{ channel: { platform: string } }> }>
+    channels: Array<{ id: string; platform: string; handle: string; followersCount: number; isActive: boolean }>
+  }
+  const [stats, setStats] = useState<StatsData>({
+    totalPosts: 0, scheduled: 0, published: 0, failed: 0,
+    scheduledPosts: [], channels: [],
+  })
+  useEffect(() => {
+    fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
+  }, [])
+
+  const { scheduled, published, scheduledPosts, channels } = stats
+  const liveChannelCount = channels.length
 
   return (
     <div className="space-y-5 pb-6">
@@ -75,19 +82,19 @@ export default function DashboardPage() {
           <Link href="/dashboard/analytics"><BarChart3 className="w-3.5 h-3.5" /> Analytics</Link>
         </Button>
         <div className="flex-1" />
-        {liveChannels.length > 0 && (
+        {liveChannelCount > 0 && (
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-600 dark:text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            {liveChannels.length} channel{liveChannels.length !== 1 ? 's' : ''} live
+            {liveChannelCount} channel{liveChannelCount !== 1 ? 's' : ''} connected
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total Reach" value="124.8K" change="+18% this week" trend="up" icon={Eye} accent />
-        <StatCard label="Engagement" value={(totalLikes + totalComments + totalShares || 8421).toLocaleString()} change="+23% this week" trend="up" icon={Heart} />
-        <StatCard label="Scheduled" value={scheduled.length} change={`${drafts.length} drafts pending`} trend="flat" icon={Clock} />
-        <StatCard label="Published" value={published.length} change="Last 30 days" trend="flat" icon={CheckCircle2} />
+        <StatCard label="Engagement" value="8,421" change="+23% this week" trend="up" icon={Heart} />
+        <StatCard label="Scheduled" value={scheduled} change="upcoming posts" trend="flat" icon={Clock} />
+        <StatCard label="Published" value={published} change="Last 30 days" trend="flat" icon={CheckCircle2} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
@@ -133,11 +140,14 @@ export default function DashboardPage() {
           <Card className="bg-card border-border shadow-sm">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h2 className="text-sm font-medium text-foreground">Upcoming</h2>
-              <Badge className="bg-muted text-muted-foreground border-0 text-[10px]">{scheduled.length} posts</Badge>
+              <Badge className="bg-muted text-muted-foreground border-0 text-[10px]">{scheduled} posts</Badge>
             </div>
             <div className="divide-y divide-border">
-              {scheduled.slice(0, 4).map(post => {
-                const Icon = PLATFORMS[post.platforms[0]]?.icon
+              {scheduledPosts.length === 0 ? (
+                <div className="px-4 py-6 text-center text-xs text-muted-foreground">No scheduled posts yet</div>
+              ) : scheduledPosts.slice(0, 4).map(post => {
+                const platform = post.channels[0]?.channel.platform ?? 'x'
+                const Icon = PLATFORMS[platform as keyof typeof PLATFORMS]?.icon
                 const dt = new Date(post.scheduledAt ?? Date.now())
                 return (
                   <div key={post.id} className="px-4 py-3 flex items-start gap-3 hover:bg-muted/30 transition-colors">
@@ -167,23 +177,23 @@ export default function DashboardPage() {
               </Button>
             </div>
             <div className="divide-y divide-border">
-              {connectedChannels.slice(0, 5).map(ch => {
-                const plat = PLATFORMS[ch.platform]
-                const Icon = plat.icon
+              {channels.length === 0 ? (
+                <div className="px-4 py-6 text-center text-xs text-muted-foreground">No channels connected yet</div>
+              ) : channels.slice(0, 5).map(ch => {
+                const plat = PLATFORMS[ch.platform as keyof typeof PLATFORMS]
+                const Icon = plat?.icon
                 return (
                   <div key={ch.id} className="px-4 py-2.5 flex items-center gap-2.5">
                     <div className="relative">
-                      <Icon className="w-4 h-4 text-muted-foreground" />
-                      {ch.live && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                      {Icon && <Icon className="w-4 h-4 text-muted-foreground" />}
+                      {ch.isActive && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-foreground truncate">{ch.handle}</p>
-                      <p className="text-[10px] text-muted-foreground">{ch.followers.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground">{(ch.followersCount ?? 0).toLocaleString()} followers</p>
                     </div>
-                    <Badge className={cn('text-[9px] border-0 px-1.5 h-4',
-                      ch.health === 'good' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                      ch.health === 'warning' ? 'bg-amber-500/10 text-amber-600' : 'bg-muted text-muted-foreground')}>
-                      {ch.health}
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] border-0 px-1.5 h-4">
+                      active
                     </Badge>
                   </div>
                 )

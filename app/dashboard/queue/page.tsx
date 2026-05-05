@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core'
@@ -16,10 +16,9 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import {
   GripVertical, Plus, Clock, Trash2, Zap, LayoutGrid, List, Settings,
-  ChevronRight, Calendar,
+  Calendar,
 } from 'lucide-react'
 import Link from 'next/link'
-import { MOCK_POSTS, MOCK_QUEUE_SLOTS } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { Post } from '@/lib/types'
@@ -69,11 +68,31 @@ export default function QueuePage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const [posts, setPosts] = useState<Post[]>(
-    MOCK_POSTS.filter(p => p.status === 'scheduled').slice(0, 10)
-  )
+  const [posts, setPosts] = useState<Post[]>([])
   const [viewMode, setViewMode] = useState<'list' | 'slots'>('list')
   const [autoQueue, setAutoQueue] = useState(true)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/posts?status=SCHEDULED&limit=50')
+      .then(r => r.json())
+      .then((data: Array<{
+        id: string; content: string; scheduledAt: string | null; status: string
+        mediaUrls: string[]; channels: Array<{ channel: { platform: string } }>
+        analytics: { likes: number; comments: number; shares: number; impressions: number } | null
+      }>) => {
+        setPosts(data.map(p => ({
+          id: p.id,
+          content: p.content,
+          platforms: (p.channels.map(c => c.channel.platform) as Post['platforms']).slice(0, 1),
+          scheduledAt: p.scheduledAt ? new Date(p.scheduledAt) : new Date(),
+          status: 'scheduled' as const,
+          mediaUrls: p.mediaUrls,
+        })))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -148,16 +167,25 @@ export default function QueuePage() {
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Time Slots</p>
           <Card className="bg-card border-border shadow-sm">
             <div className="divide-y divide-border">
-              {MOCK_QUEUE_SLOTS.slice(0, 8).map(slot => (
+              {[
+                { id: '1', day: 'Mon', time: '9:00 AM', platforms: ['x', 'linkedin'] },
+                { id: '2', day: 'Mon', time: '12:00 PM', platforms: ['instagram'] },
+                { id: '3', day: 'Tue', time: '10:00 AM', platforms: ['x'] },
+                { id: '4', day: 'Wed', time: '2:00 PM', platforms: ['linkedin', 'facebook'] },
+                { id: '5', day: 'Thu', time: '11:00 AM', platforms: ['instagram', 'threads'] },
+                { id: '6', day: 'Fri', time: '9:00 AM', platforms: ['x', 'linkedin'] },
+                { id: '7', day: 'Fri', time: '3:00 PM', platforms: ['instagram'] },
+                { id: '8', day: 'Sat', time: '10:00 AM', platforms: ['facebook'] },
+              ].map(slot => (
                 <div key={slot.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors">
                   <Clock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="text-xs text-foreground">{slot.day ?? `Day ${slot.dayOfWeek}`} · {slot.time ?? `${slot.hour}:${String(slot.minute).padStart(2,'0')}`}</p>
-                    <p className="text-[10px] text-muted-foreground">{(slot.platforms ?? []).length} platform{(slot.platforms ?? []).length !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-foreground">{slot.day} · {slot.time}</p>
+                    <p className="text-[10px] text-muted-foreground">{slot.platforms.length} platform{slot.platforms.length !== 1 ? 's' : ''}</p>
                   </div>
                   <div className="flex gap-0.5">
-                    {(slot.platforms ?? []).slice(0, 3).map(p => {
-                      const Icon = PLATFORMS[p]?.icon
+                    {slot.platforms.slice(0, 3).map(p => {
+                      const Icon = PLATFORMS[p as keyof typeof PLATFORMS]?.icon
                       return Icon ? <Icon key={p} className="w-3 h-3 text-muted-foreground/60" /> : null
                     })}
                   </div>

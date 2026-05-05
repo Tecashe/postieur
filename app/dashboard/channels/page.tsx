@@ -1,19 +1,22 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import {
-  Plus, Search, Settings, CheckCircle2, AlertCircle, XCircle,
-  Users, BarChart3, RefreshCw, ExternalLink, Trash2,
+  Plus, Search, Settings, CheckCircle2, AlertCircle,
+  Users, BarChart3, RefreshCw, Trash2,
 } from 'lucide-react'
-import { MOCK_CHANNELS } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
-import type { Channel, Platform } from '@/lib/types'
+import type { Platform } from '@/lib/types'
+
+type DbChannel = {
+  id: string; platform: string; handle: string; displayName: string | null
+  isActive: boolean; followers: number; avatarUrl: string | null
+}
 
 const PLATFORM_GROUPS: { label: string; platforms: Platform[] }[] = [
   { label: 'Social', platforms: ['instagram', 'facebook', 'threads', 'snapchat', 'tiktok', 'pinterest'] },
@@ -25,29 +28,40 @@ const PLATFORM_GROUPS: { label: string; platforms: Platform[] }[] = [
   { label: 'Other', platforms: ['dribbble', 'vk'] },
 ]
 
-function HealthIndicator({ health }: { health?: string }) {
-  if (health === 'good') return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-  if (health === 'warning') return <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-  return <XCircle className="w-3.5 h-3.5 text-destructive" />
-}
-
 export default function ChannelsPage() {
   const [search, setSearch] = useState('')
-  const connected = MOCK_CHANNELS.filter(c => c.isConnected)
-  const searchFiltered = connected.filter(c =>
+  const [channels, setChannels] = useState<DbChannel[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/channels')
+      .then(r => r.json())
+      .then((data: DbChannel[]) => setChannels(data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const searchFiltered = channels.filter(c =>
     !search || c.handle.toLowerCase().includes(search.toLowerCase()) ||
     c.platform.toLowerCase().includes(search.toLowerCase())
   )
+
+  const handleDisconnect = async (id: string) => {
+    try {
+      await fetch(`/api/channels/${id}`, { method: 'DELETE' })
+      setChannels(prev => prev.filter(c => c.id !== id))
+    } catch { /* ignore */ }
+  }
 
   return (
     <div className="space-y-6 pb-6">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Connected', value: connected.length, icon: CheckCircle2, accent: true },
-          { label: 'Total Followers', value: connected.reduce((s, c) => s + c.followers, 0).toLocaleString(), icon: Users },
-          { label: 'Posts This Month', value: connected.reduce((s, c) => s + (c.postsThisMonth ?? 0), 0), icon: BarChart3 },
-          { label: 'Health Issues', value: connected.filter(c => c.health !== 'good').length, icon: AlertCircle },
+          { label: 'Connected', value: channels.length, icon: CheckCircle2, accent: true },
+          { label: 'Total Followers', value: channels.reduce((s, c) => s + c.followers, 0).toLocaleString(), icon: Users },
+          { label: 'Active Channels', value: channels.filter(c => c.isActive).length, icon: BarChart3 },
+          { label: 'Platforms', value: new Set(channels.map(c => c.platform)).size, icon: AlertCircle },
         ].map(s => (
           <Card key={s.label} className={cn('bg-card border-border shadow-sm p-4', s.accent && 'border-accent/30 bg-accent/5')}>
             <div className="flex items-center justify-between mb-1">
@@ -67,50 +81,62 @@ export default function ChannelsPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search channels..." className="pl-8 h-8 text-xs bg-input border-border" />
           </div>
           <div className="flex-1" />
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs border-border"><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs border-border" onClick={() => { setLoading(true); fetch('/api/channels').then(r => r.json()).then(setChannels).finally(() => setLoading(false)) }}>
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {searchFiltered.map(ch => {
-            const plat = PLATFORMS[ch.platform]
-            const Icon = plat.icon
-            return (
-              <Card key={ch.id} className="bg-card border-border shadow-sm p-4 hover:border-border transition-all">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <h3 className="text-xs font-medium text-foreground truncate">{ch.handle}</h3>
-                      {ch.live && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[1,2,3].map(i => <div key={i} className="h-36 rounded-sm bg-muted/30 animate-pulse" />)}
+          </div>
+        ) : searchFiltered.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            {channels.length === 0 ? 'No channels connected yet. Connect one below.' : 'No channels match your search.'}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {searchFiltered.map(ch => {
+              const plat = PLATFORMS[ch.platform as keyof typeof PLATFORMS]
+              const Icon = plat?.icon
+              return (
+                <Card key={ch.id} className="bg-card border-border shadow-sm p-4 hover:border-border transition-all">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
+                      {Icon && <Icon className="w-5 h-5 text-muted-foreground" />}
                     </div>
-                    <p className="text-[10px] text-muted-foreground">{plat.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <h3 className="text-xs font-medium text-foreground truncate">{ch.handle}</h3>
+                        {ch.isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">{plat?.name ?? ch.platform}</p>
+                    </div>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                   </div>
-                  <HealthIndicator health={ch.health} />
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div className="bg-muted/40 rounded-sm p-2">
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Followers</p>
-                    <p className="text-sm font-medium text-foreground">{ch.followers.toLocaleString()}</p>
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="bg-muted/40 rounded-sm p-2">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Followers</p>
+                      <p className="text-sm font-medium text-foreground">{ch.followers.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-muted/40 rounded-sm p-2">
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Status</p>
+                      <p className="text-sm font-medium text-foreground">{ch.isActive ? 'Active' : 'Paused'}</p>
+                    </div>
                   </div>
-                  <div className="bg-muted/40 rounded-sm p-2">
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wide">Posts / mo</p>
-                    <p className="text-sm font-medium text-foreground">{ch.postsThisMonth ?? 0}</p>
+                  <div className="flex gap-1.5">
+                    <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] border-border gap-1">
+                      <Settings className="w-3 h-3" /> Settings
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDisconnect(ch.id)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button variant="outline" size="sm" className="flex-1 h-7 text-[11px] border-border gap-1">
-                    <Settings className="w-3 h-3" /> Settings
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Connect new */}
@@ -124,7 +150,7 @@ export default function ChannelsPage() {
                 {group.platforms.map(platform => {
                   const plat = PLATFORMS[platform]
                   const Icon = plat?.icon
-                  const alreadyConnected = connected.some(c => c.platform === platform)
+                  const alreadyConnected = channels.some(c => c.platform === platform)
                   return (
                     <button
                       key={platform}

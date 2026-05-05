@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from 'sonner'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -50,6 +51,7 @@ export default function RootLayout({
             disableTransitionOnChange={false}
           >
             {children}
+            <Toaster richColors position="bottom-right" />
             {process.env.NODE_ENV === 'production' && <Analytics />}
           </ThemeProvider>
         </body>

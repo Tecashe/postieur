@@ -18,15 +18,17 @@ interface HeaderProps {
 }
 
 const BREADCRUMBS: Record<string, string> = {
-  '/': 'Dashboard',
-  '/calendar': 'Calendar',
-  '/compose': 'Compose',
-  '/queue': 'Queue',
-  '/analytics': 'Analytics',
-  '/media': 'Media Library',
-  '/channels': 'Channels',
-  '/members': 'Members',
-  '/settings': 'Settings',
+  '/dashboard': 'Dashboard',
+  '/dashboard/calendar': 'Calendar',
+  '/dashboard/compose': 'Compose',
+  '/dashboard/queue': 'Queue',
+  '/dashboard/analytics': 'Analytics',
+  '/dashboard/media': 'Media Library',
+  '/dashboard/channels': 'Channels',
+  '/dashboard/members': 'Members',
+  '/dashboard/settings': 'Settings',
+  '/dashboard/drafts': 'Drafts',
+  '/dashboard/templates': 'Templates',
 }
 
 export function Header({ onSidebarToggle }: HeaderProps) {

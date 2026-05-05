@@ -69,7 +69,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const collapsed = !isMobile && isCollapsed
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/' || pathname === '/dashboard'
+    if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
   }
 
@@ -177,7 +177,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 
                 const LinkContent = (
                   <Link
-                    href={`/channels/${channel.id}`}
+                    href={`/dashboard/channels/${channel.id}`}
                     onClick={() => isMobile && onClose()}
                     className={cn(
                       'group flex items-center rounded-xl transition-all duration-200 relative outline-none',

@@ -139,27 +139,27 @@ export const SIDEBAR_SECTIONS = [
   {
     title: 'WORKSPACE',
     items: [
-      { label: 'Dashboard', href: '/', icon: 'LayoutDashboard' },
-      { label: 'Calendar', href: '/calendar', icon: 'CalendarDays' },
-      { label: 'Compose', href: '/compose', icon: 'PenSquare' },
-      { label: 'Queue', href: '/queue', icon: 'ListOrdered' },
-      { label: 'Analytics', href: '/analytics', icon: 'BarChart3' },
+      { label: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
+      { label: 'Calendar', href: '/dashboard/calendar', icon: 'CalendarDays' },
+      { label: 'Compose', href: '/dashboard/compose', icon: 'PenSquare' },
+      { label: 'Queue', href: '/dashboard/queue', icon: 'ListOrdered' },
+      { label: 'Analytics', href: '/dashboard/analytics', icon: 'BarChart3' },
     ],
   },
   {
     title: 'LIBRARY',
     items: [
-      { label: 'Media Library', href: '/media', icon: 'Image' },
-      { label: 'Templates', href: '/templates', icon: 'LayoutTemplate' },
-      { label: 'Drafts', href: '/drafts', icon: 'FileEdit' },
+      { label: 'Media Library', href: '/dashboard/media', icon: 'Image' },
+      { label: 'Templates', href: '/dashboard/templates', icon: 'LayoutTemplate' },
+      { label: 'Drafts', href: '/dashboard/drafts', icon: 'FileEdit' },
     ],
   },
   {
     title: 'SETTINGS',
     items: [
-      { label: 'Channels', href: '/channels', icon: 'Radio' },
-      { label: 'Members', href: '/members', icon: 'Users' },
-      { label: 'Settings', href: '/settings', icon: 'Settings' },
+      { label: 'Channels', href: '/dashboard/channels', icon: 'Radio' },
+      { label: 'Members', href: '/dashboard/members', icon: 'Users' },
+      { label: 'Settings', href: '/dashboard/settings', icon: 'Settings' },
     ],
   },
 ]

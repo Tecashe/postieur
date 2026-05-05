@@ -72,7 +72,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <div className={cn('h-16 flex items-center border-b border-border/50 px-4', collapsed && 'justify-center px-0')}>
           <div className="flex items-center gap-3 w-full">
             <div className="w-8 h-8 rounded-sm flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ring-1 ring-border">
-              <Image src="/apple-touch-icon.png" alt="Caelpost Logo" width={32} height={32} className="object-cover" />
+              {activeOrg?.hasImage
+                ? <Image src={activeOrg.imageUrl} alt={activeOrg.name} width={32} height={32} className="object-cover" />
+                : <Image src="/apple-touch-icon.png" alt="Caelpost Logo" width={32} height={32} className="object-cover" />}
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
@@ -104,8 +106,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                           onClick={() => setActive?.({ organization: membership.organization })}
                           className="flex items-center gap-2"
                         >
-                          <div className="w-5 h-5 rounded-sm bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Building2 className="w-3 h-3 text-primary" />
+                          <div className="w-5 h-5 rounded-sm bg-primary/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            {membership.organization.hasImage
+                              ? <Image src={membership.organization.imageUrl} alt={membership.organization.name} width={20} height={20} className="object-cover" />
+                              : <Building2 className="w-3 h-3 text-primary" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm truncate">{membership.organization.name}</p>

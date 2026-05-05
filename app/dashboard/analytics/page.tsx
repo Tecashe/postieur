@@ -1,17 +1,16 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share2, Users, Zap } from 'lucide-react'
-import { MOCK_PLATFORM_STATS, MOCK_HEATMAP, MOCK_BEST_TIMES } from '@/lib/mock-data'
+import { TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Users, Zap, RefreshCw } from 'lucide-react'
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+
 
 const PERIOD_OPTIONS = ['7d', '30d', '90d'] as const
 type Period = typeof PERIOD_OPTIONS[number]
@@ -82,23 +81,48 @@ function HeatmapCell({ value, max }: { value: number; max: number }) {
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const HOURS = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}`)
 
+type ApiResponse = {
+  totals: { impressions: number; engagement: number; comments: number; likes: number; shares: number; reach: number } | null
+  platformStats: Array<{ platform: string; posts: number; impressions: number; engagement: number; followers: number; followerGrowth: number }>
+  heatmap: Array<{ dayOfWeek: number; hour: number; value: number }>
+  bestTimes: Array<{ dayOfWeek: number; hour: number; value: number; day: string }>
+  trendData: Array<{ date: string; impressions: number; engagement: number; followers: number }>
+  hasData: boolean
+}
+
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>('7d')
   const [metric, setMetric] = useState<'impressions' | 'engagement' | 'followers'>('impressions')
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<ApiResponse | null>(null)
 
-  const trendData = TREND_DATA[period]
-  const pieData = MOCK_PLATFORM_STATS.map((s, i) => ({
-    name: PLATFORMS[s.platform]?.name ?? s.platform,
-    value: s.engagement,
-    color: PIE_COLORS[i % PIE_COLORS.length],
-  }))
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/analytics?period=${period}`)
+      .then(r => r.json())
+      .then((d: ApiResponse) => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [period])
 
-  const heatmaxVal = MOCK_HEATMAP.length > 0 ? Math.max(...MOCK_HEATMAP.map(c => c.value)) : 1
+  // Fall back to static demo data when DB has nothing yet
+  const trendData = (data?.trendData?.length ? data.trendData : TREND_DATA[period])
+  const platformStats = data?.platformStats ?? []
+  const heatmap = data?.heatmap ?? []
+  const bestTimes = data?.bestTimes ?? []
+  const totals = data?.totals
+
+  const pieData = platformStats.length > 0
+    ? platformStats.map((s, i) => ({ name: PLATFORMS[s.platform as keyof typeof PLATFORMS]?.name ?? s.platform, value: s.engagement, color: PIE_COLORS[i % PIE_COLORS.length] }))
+    : []
+
+  const heatmaxVal = heatmap.length > 0 ? Math.max(...heatmap.map(c => c.value)) : 1
 
   return (
     <div className="space-y-5 pb-6">
       {/* Controls */}
       <div className="flex items-center gap-2 flex-wrap">
+        {loading && <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin" />}
         <div className="flex rounded-sm overflow-hidden border border-border">
           {PERIOD_OPTIONS.map(p => (
             <button key={p} onClick={() => setPeriod(p)}
@@ -121,10 +145,26 @@ export default function AnalyticsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Impressions" value="847.2K" change="+24% vs last period" trend="up" icon={Eye} />
-        <MetricCard label="Engagements" value="31.4K" change="+18% vs last period" trend="up" icon={Heart} />
-        <MetricCard label="Comments" value="4,821" change="+9% vs last period" trend="up" icon={MessageCircle} />
-        <MetricCard label="Follower Growth" value="+2,341" change="+31% vs last period" trend="up" icon={Users} />
+        <MetricCard
+          label="Impressions" icon={Eye} trend="up"
+          value={loading ? '—' : totals ? (totals.impressions >= 1000 ? `${(totals.impressions / 1000).toFixed(1)}K` : totals.impressions.toLocaleString()) : '0'}
+          change={loading ? '…' : totals ? `${totals.impressions.toLocaleString()} total` : 'No data yet'}
+        />
+        <MetricCard
+          label="Engagements" icon={Heart} trend="up"
+          value={loading ? '—' : totals ? (totals.engagement >= 1000 ? `${(totals.engagement / 1000).toFixed(1)}K` : totals.engagement.toLocaleString()) : '0'}
+          change={loading ? '…' : totals ? `${totals.likes} likes · ${totals.shares} shares` : 'No data yet'}
+        />
+        <MetricCard
+          label="Comments" icon={MessageCircle} trend="flat"
+          value={loading ? '—' : totals ? totals.comments.toLocaleString() : '0'}
+          change={loading ? '…' : 'From analytics data'}
+        />
+        <MetricCard
+          label="Reach" icon={Users} trend="up"
+          value={loading ? '—' : totals ? (totals.reach >= 1000 ? `${(totals.reach / 1000).toFixed(1)}K` : totals.reach.toLocaleString()) : '0'}
+          change={loading ? '…' : 'Unique accounts reached'}
+        />
       </div>
 
       {/* Main trend chart */}
@@ -180,25 +220,22 @@ export default function AnalyticsPage() {
             <h2 className="text-sm font-medium text-foreground">Best Times to Post</h2>
           </div>
           <div className="p-4 space-y-2">
-            {MOCK_BEST_TIMES.slice(0, 6).map((slot, i) => {
-              const plat = PLATFORMS[slot.platform]
-              const Icon = plat?.icon
-              return (
-                <div key={i} className="flex items-center gap-3 p-2.5 rounded-sm hover:bg-muted/40 transition-colors">
-                  {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground">{plat?.name} · {slot.day} {slot.hour}:00</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-accent rounded-full" style={{ width: `${slot.score}%` }} />
-                      </div>
-                      <span className="text-[10px] font-mono text-muted-foreground">{slot.score}</span>
+            {bestTimes.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No data yet — publish posts to see best times</p>
+            ) : bestTimes.slice(0, 6).map((slot, i) => (
+              <div key={i} className="flex items-center gap-3 p-2.5 rounded-sm hover:bg-muted/40 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground">{slot.day} at {slot.hour}:00</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-accent rounded-full" style={{ width: `${Math.round(slot.value / Math.max(...bestTimes.map(b => b.value), 1) * 100)}%` }} />
                     </div>
+                    <span className="text-[10px] font-mono text-muted-foreground">{slot.value}</span>
                   </div>
-                  <Zap className="w-3 h-3 text-accent flex-shrink-0" />
                 </div>
-              )
-            })}
+                <Zap className="w-3 h-3 text-accent flex-shrink-0" />
+              </div>
+            ))}
           </div>
         </Card>
       </div>
@@ -224,7 +261,7 @@ export default function AnalyticsPage() {
                 ))}
                 {DAYS.map((_, dayIdx) =>
                   HOURS.map((_, hourIdx) => {
-                    const cell = MOCK_HEATMAP.find(c => c.dayOfWeek === dayIdx && c.hour === hourIdx)
+                    const cell = heatmap.find(c => c.dayOfWeek === dayIdx && c.hour === hourIdx)
                     return <HeatmapCell key={`${dayIdx}-${hourIdx}`} value={cell?.value ?? 0} max={heatmaxVal} />
                   })
                 )}
@@ -260,8 +297,10 @@ export default function AnalyticsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {MOCK_PLATFORM_STATS.map(stat => {
-                const plat = PLATFORMS[stat.platform]
+              {platformStats.length === 0 ? (
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-xs text-muted-foreground">No analytics data yet. Publish posts to see platform breakdown.</td></tr>
+              ) : platformStats.map(stat => {
+                const plat = PLATFORMS[stat.platform as keyof typeof PLATFORMS]
                 const Icon = plat?.icon
                 return (
                   <tr key={stat.platform} className="hover:bg-muted/20 transition-colors">
@@ -272,13 +311,13 @@ export default function AnalyticsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-muted-foreground">{stat.posts}</td>
-                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{(stat.impressions ?? stat.reach ?? 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{(stat.engagement ?? 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{stat.impressions.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground">{stat.engagement.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right font-mono text-muted-foreground">{stat.followers.toLocaleString()}</td>
                     <td className="px-5 py-3 text-right">
                       <Badge className={cn('text-[10px] border-0',
-                        (stat.followerGrowth ?? 0) >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive')}>
-                        {(stat.followerGrowth ?? 0) >= 0 ? '+' : ''}{stat.followerGrowth ?? 0}%
+                        stat.followerGrowth >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive')}>
+                        {stat.followerGrowth >= 0 ? '+' : ''}{stat.followerGrowth}%
                       </Badge>
                     </td>
                   </tr>

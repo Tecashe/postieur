@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,7 +22,6 @@ import {
   TrendingUp, BarChart3, ChevronDown, GripVertical, Minus, Globe,
 } from 'lucide-react'
 import { PLATFORMS, PLATFORM_CHAR_LIMITS } from '@/lib/constants'
-import { MOCK_CHANNELS, MOCK_SIGNATURES } from '@/lib/mock-data'
 import { cn } from '@/lib/utils'
 import type { Platform } from '@/lib/types'
 import { PlatformPreview } from '@/components/compose/platform-preview'
@@ -71,14 +70,30 @@ const AI_VARIANTS = [
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function ComposePage() {
+  // ── Real DB channels ────────────────────────────────────────────────────────
+  type DbChannel = {
+    id: string; platform: string; handle: string; displayName: string | null
+    isActive: boolean; followers: number; avatarUrl: string | null
+  }
+  const [dbChannels, setDbChannels] = useState<DbChannel[]>([])
+  const [channelsLoading, setChannelsLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/channels')
+      .then(r => r.json())
+      .then((data: DbChannel[]) => { setDbChannels(data); })
+      .catch(() => {})
+      .finally(() => setChannelsLoading(false))
+  }, [])
+
   const [content, setContent] = useState('')
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(['inst-1', 'linked-1'])
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([])
   const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule' | 'queue'>('schedule')
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduleTime, setScheduleTime] = useState('09:00')
   const [postType, setPostType] = useState<'post' | 'thread' | 'carousel'>('post')
   const [selectedTone, setSelectedTone] = useState('Professional')
-  const [enableSignature, setEnableSignature] = useState(true)
+  const [enableSignature, setEnableSignature] = useState(false)
   const [crossPostDelay, setCrossPostDelay] = useState('0')
   const [showAI, setShowAI] = useState(true)
   const [aiGenerating, setAiGenerating] = useState(false)
@@ -90,7 +105,15 @@ export default function ComposePage() {
   const [activeThreadIdx, setActiveThreadIdx] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const connectedChannels = MOCK_CHANNELS.filter(c => c.isConnected)
+  // Adapt DB channels to the shape the rest of the component expects
+  const connectedChannels = dbChannels.map(ch => ({
+    id: ch.id,
+    platform: ch.platform as Platform,
+    handle: ch.handle,
+    followers: ch.followers,
+    isConnected: ch.isActive,
+    live: false,
+  }))
 
   const handleChannelToggle = (channelId: string) => {
     setSelectedChannels(prev =>
@@ -593,15 +616,36 @@ export default function ComposePage() {
           <Card className="bg-card border-border shadow-sm">
             <div className="flex items-center justify-between px-4 pt-4 pb-2">
               <h3 className="text-sm font-medium text-foreground">Post to</h3>
-              <button className="text-[11px] text-accent hover:underline">
-                {selectedChannels.length === connectedChannels.length ? 'Deselect all' : 'Select all'}
-              </button>
+              {connectedChannels.length > 0 && (
+                <button
+                  onClick={() => setSelectedChannels(
+                    selectedChannels.length === connectedChannels.length
+                      ? []
+                      : connectedChannels.map(c => c.id)
+                  )}
+                  className="text-[11px] text-accent hover:underline"
+                >
+                  {selectedChannels.length === connectedChannels.length ? 'Deselect all' : 'Select all'}
+                </button>
+              )}
             </div>
             <div className="px-2 pb-2 space-y-0.5 max-h-72 overflow-y-auto">
-              {connectedChannels.map(channel => {
+              {channelsLoading ? (
+                <div className="space-y-1 px-2">
+                  {[1,2,3].map(i => <div key={i} className="h-9 rounded-sm bg-muted/30 animate-pulse" />)}
+                </div>
+              ) : connectedChannels.length === 0 ? (
+                <div className="px-3 py-5 text-center">
+                  <p className="text-xs text-muted-foreground mb-2">No channels connected</p>
+                  <a href="/dashboard/channels" className="text-[11px] text-accent hover:underline">Connect a channel →</a>
+                </div>
+              ) : connectedChannels.map(channel => {
                 const plat = PLATFORMS[channel.platform]
+                if (!plat) return null
                 const Icon = plat.icon
                 const selected = selectedChannels.includes(channel.id)
+                const limit = PLATFORM_CHAR_LIMITS[channel.platform] ?? 5000
+                const overLimit = charCount > limit
                 return (
                   <button
                     key={channel.id}
@@ -619,9 +663,14 @@ export default function ComposePage() {
                     <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{channel.handle}</p>
-                      <p className="text-[10px] text-muted-foreground">{channel.followers.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground">{plat.name} · {channel.followers.toLocaleString()}</p>
                     </div>
-                    {channel.live && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                    {selected && overLimit && (
+                      <span className="text-[9px] text-destructive font-medium flex-shrink-0">Over limit</span>
+                    )}
+                    {selected && !overLimit && (
+                      <span className="text-[9px] text-muted-foreground/60 font-mono flex-shrink-0">{(limit - charCount).toLocaleString()}</span>
+                    )}
                   </button>
                 )
               })}
@@ -710,7 +759,7 @@ export default function ComposePage() {
               <div>
                 <p className="text-xs font-medium text-foreground">Append signature</p>
                 <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-                  {MOCK_SIGNATURES[0]?.content.slice(0, 40)}...
+                  Add your custom sign-off
                 </p>
               </div>
               <Switch

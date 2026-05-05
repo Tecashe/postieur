@@ -15,25 +15,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  UserPlus, Search, Shield, Edit3, Eye, Crown, Trash2, Mail, Clock, ChevronDown, Check,
+  UserPlus, Search, Shield, Edit3, Crown, Trash2, Mail, Clock, ChevronDown, Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type ClerkRole = 'org:owner' | 'org:admin' | 'org:editor' | 'org:viewer'
+type ClerkRole = 'org:owner' | 'org:admin' | 'org:member'
 
 const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   'org:owner':  { label: 'Owner',  icon: Crown,  color: 'text-primary bg-primary/10' },
   'org:admin':  { label: 'Admin',  icon: Shield, color: 'text-accent bg-accent/10' },
-  'org:editor': { label: 'Editor', icon: Edit3,  color: 'text-foreground bg-muted' },
-  'org:viewer': { label: 'Viewer', icon: Eye,    color: 'text-muted-foreground bg-muted/60' },
+  'org:member': { label: 'Member', icon: Edit3,  color: 'text-foreground bg-muted' },
 }
 
-const ASSIGNABLE_ROLES: ClerkRole[] = ['org:admin', 'org:editor', 'org:viewer']
+const ASSIGNABLE_ROLES: ClerkRole[] = ['org:admin', 'org:member']
 
-const INVITE_ROLES: { value: ClerkRole; label: string; Icon: React.ElementType }[] = [
-  { value: 'org:admin',  label: 'Admin',  Icon: Shield },
-  { value: 'org:editor', label: 'Editor', Icon: Edit3 },
-  { value: 'org:viewer', label: 'Viewer', Icon: Eye },
+const INVITE_ROLES: { value: ClerkRole; label: string; Icon: React.ElementType; desc: string }[] = [
+  { value: 'org:admin',  label: 'Admin',  Icon: Shield, desc: 'Manage members & content' },
+  { value: 'org:member', label: 'Member', Icon: Edit3,  desc: 'Create & schedule posts' },
 ]
 
 export default function MembersPage() {
@@ -45,7 +43,7 @@ export default function MembersPage() {
 
   const [search, setSearch] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<ClerkRole>('org:editor')
+  const [inviteRole, setInviteRole] = useState<ClerkRole>('org:member')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [inviteSuccess, setInviteSuccess] = useState(false)
@@ -72,8 +70,7 @@ export default function MembersPage() {
   const roleCounts: Record<string, number> = {
     'org:owner':  members.filter((m) => m.role === 'org:owner').length,
     'org:admin':  members.filter((m) => m.role === 'org:admin').length,
-    'org:editor': members.filter((m) => m.role === 'org:editor').length,
-    'org:viewer': members.filter((m) => m.role === 'org:viewer').length,
+    'org:member': members.filter((m) => m.role === 'org:member').length,
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -294,11 +291,12 @@ export default function MembersPage() {
                 <div>
                   <Label className="text-xs">Role</Label>
                   <div className="grid grid-cols-2 gap-1.5 mt-1">
-                    {INVITE_ROLES.map(({ value, label, Icon }) => (
+                    {INVITE_ROLES.map(({ value, label, Icon, desc }) => (
                       <button key={value} type="button" onClick={() => setInviteRole(value)}
-                        className={cn('flex items-center gap-2 px-3 py-2 rounded-sm border text-xs transition-all text-left',
+                        className={cn('flex flex-col gap-0.5 px-3 py-2 rounded-sm border text-xs transition-all text-left',
                           inviteRole === value ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
-                        <Icon className="w-3.5 h-3.5" />{label}
+                        <span className="flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" />{label}</span>
+                        <span className="text-[10px] opacity-70">{desc}</span>
                       </button>
                     ))}
                   </div>

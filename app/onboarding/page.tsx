@@ -23,7 +23,12 @@ export default function OnboardingPage() {
     setError(null)
 
     try {
-      const org = await createOrganization({ name: workspaceName.trim() })
+      const slug = workspaceName.trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 48)
+      const org = await createOrganization({ name: workspaceName.trim(), slug })
       if (setActive) {
         await setActive({ organization: org })
       }

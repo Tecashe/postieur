@@ -1,47 +1,20 @@
-import { LucideIcon, Instagram, Linkedin, Twitter, Facebook, Music2, Youtube, PinIcon, Dribbble } from 'lucide-react'
+import {
+  LucideIcon, Instagram, Linkedin, Twitter, Facebook, Music2,
+  Youtube, PinIcon, Dribbble,
+  LayoutDashboard, CalendarDays, PenLine, ListOrdered, BarChart3,
+  ImageIcon, LayoutTemplate, FilePen, Radio, Users, Settings,
+} from 'lucide-react'
 import { Platform } from './types'
 
 export const PLATFORMS: Record<Platform, { name: string; icon: LucideIcon; color: string; handle?: string }> = {
-  instagram: {
-    name: 'Instagram',
-    icon: Instagram,
-    color: 'bg-pink-500',
-  },
-  linkedin: {
-    name: 'LinkedIn',
-    icon: Linkedin,
-    color: 'bg-blue-600',
-  },
-  x: {
-    name: 'X (Twitter)',
-    icon: Twitter,
-    color: 'bg-black',
-  },
-  facebook: {
-    name: 'Facebook',
-    icon: Facebook,
-    color: 'bg-blue-600',
-  },
-  tiktok: {
-    name: 'TikTok',
-    icon: Music2,
-    color: 'bg-black',
-  },
-  youtube: {
-    name: 'YouTube',
-    icon: Youtube,
-    color: 'bg-red-600',
-  },
-  pinterest: {
-    name: 'Pinterest',
-    icon: PinIcon,
-    color: 'bg-red-600',
-  },
-  bluesky: {
-    name: 'Bluesky',
-    icon: Dribbble,
-    color: 'bg-blue-400',
-  },
+  instagram: { name: 'Instagram', icon: Instagram, color: 'bg-pink-500' },
+  linkedin: { name: 'LinkedIn', icon: Linkedin, color: 'bg-blue-600' },
+  x: { name: 'X (Twitter)', icon: Twitter, color: 'bg-black' },
+  facebook: { name: 'Facebook', icon: Facebook, color: 'bg-blue-600' },
+  tiktok: { name: 'TikTok', icon: Music2, color: 'bg-black' },
+  youtube: { name: 'YouTube', icon: Youtube, color: 'bg-red-600' },
+  pinterest: { name: 'Pinterest', icon: PinIcon, color: 'bg-red-600' },
+  bluesky: { name: 'Bluesky', icon: Dribbble, color: 'bg-blue-400' },
 }
 
 export const POST_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -73,16 +46,7 @@ export const POST_STATUS_COLORS: Record<string, { bg: string; text: string; bord
 }
 
 export const TIMEZONES = [
-  'UTC',
-  'EST',
-  'CST',
-  'MST',
-  'PST',
-  'GMT',
-  'CET',
-  'IST',
-  'JST',
-  'AEST',
+  'UTC', 'EST', 'CST', 'MST', 'PST', 'GMT', 'CET', 'IST', 'JST', 'AEST',
 ]
 
 export const DATE_FORMATS = {
@@ -93,73 +57,38 @@ export const DATE_FORMATS = {
 }
 
 export const CHANNELS_NAV = [
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    platform: 'instagram' as Platform,
-    handle: '@company.pro',
-    icon: 'instagram',
-    live: true,
-  },
-  {
-    id: 'linkedin',
-    name: 'LinkedIn',
-    platform: 'linkedin' as Platform,
-    handle: 'company-page',
-    icon: 'linkedin',
-    live: true,
-  },
-  {
-    id: 'twitter',
-    name: 'X',
-    platform: 'x' as Platform,
-    handle: '@company',
-    icon: 'twitter',
-    live: false,
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok',
-    platform: 'tiktok' as Platform,
-    handle: '@company',
-    icon: 'music2',
-    live: true,
-  },
-  {
-    id: 'youtube',
-    name: 'YouTube',
-    platform: 'youtube' as Platform,
-    handle: '@company',
-    icon: 'youtube',
-    live: false,
-  },
+  { id: 'instagram', platform: 'instagram' as Platform, handle: '@company.pro', live: true },
+  { id: 'linkedin', platform: 'linkedin' as Platform, handle: 'company-page', live: true },
+  { id: 'twitter', platform: 'x' as Platform, handle: '@company', live: false },
+  { id: 'tiktok', platform: 'tiktok' as Platform, handle: '@company', live: true },
+  { id: 'youtube', platform: 'youtube' as Platform, handle: '@company', live: false },
 ]
 
-export const SIDEBAR_SECTIONS = [
+export const SIDEBAR_SECTIONS: { title: string; items: { label: string; href: string; icon: LucideIcon }[] }[] = [
   {
     title: 'WORKSPACE',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
-      { label: 'Calendar', href: '/dashboard/calendar', icon: 'CalendarDays' },
-      { label: 'Compose', href: '/dashboard/compose', icon: 'PenSquare' },
-      { label: 'Queue', href: '/dashboard/queue', icon: 'ListOrdered' },
-      { label: 'Analytics', href: '/dashboard/analytics', icon: 'BarChart3' },
+      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { label: 'Calendar', href: '/dashboard/calendar', icon: CalendarDays },
+      { label: 'Compose', href: '/dashboard/compose', icon: PenLine },
+      { label: 'Queue', href: '/dashboard/queue', icon: ListOrdered },
+      { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     ],
   },
   {
     title: 'LIBRARY',
     items: [
-      { label: 'Media Library', href: '/dashboard/media', icon: 'Image' },
-      { label: 'Templates', href: '/dashboard/templates', icon: 'LayoutTemplate' },
-      { label: 'Drafts', href: '/dashboard/drafts', icon: 'FileEdit' },
+      { label: 'Media Library', href: '/dashboard/media', icon: ImageIcon },
+      { label: 'Templates', href: '/dashboard/templates', icon: LayoutTemplate },
+      { label: 'Drafts', href: '/dashboard/drafts', icon: FilePen },
     ],
   },
   {
     title: 'SETTINGS',
     items: [
-      { label: 'Channels', href: '/dashboard/channels', icon: 'Radio' },
-      { label: 'Members', href: '/dashboard/members', icon: 'Users' },
-      { label: 'Settings', href: '/dashboard/settings', icon: 'Settings' },
+      { label: 'Channels', href: '/dashboard/channels', icon: Radio },
+      { label: 'Members', href: '/dashboard/members', icon: Users },
+      { label: 'Settings', href: '/dashboard/settings', icon: Settings },
     ],
   },
 ]

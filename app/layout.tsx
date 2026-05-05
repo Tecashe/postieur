@@ -4,8 +4,8 @@ import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Postieur | Premium Social Scheduling',
-  description: 'The premium social media scheduling platform built for creators and teams. Schedule, analyze, and grow across all platforms.',
+  title: 'Caelpost | Premium Social Scheduling',
+  description: 'Schedule smarter. Grow faster. Caelpost is the premium social media scheduling platform built for creators and teams.',
   generator: 'MadebyCashe',
   manifest: '/site.webmanifest',
   icons: {

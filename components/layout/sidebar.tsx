@@ -20,17 +20,6 @@ import { useSidebar } from '@/hooks/use-sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 import {
-  LayoutDashboard,
-  CalendarDays,
-  PenSquare,
-  ListOrdered,
-  BarChart3,
-  Image as ImageIcon,
-  LayoutTemplate,
-  FileEdit,
-  Radio,
-  Users,
-  Settings,
   ChevronDown,
   MoreVertical,
   ChevronLeft,
@@ -38,22 +27,7 @@ import {
   Sun,
   Moon,
   CircleDashed,
-  type LucideIcon
 } from 'lucide-react'
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  LayoutDashboard,
-  CalendarDays,
-  PenSquare,
-  ListOrdered,
-  BarChart3,
-  Image: ImageIcon,
-  LayoutTemplate,
-  FileEdit,
-  Radio,
-  Users,
-  Settings,
-}
 
 interface SidebarProps {
   open: boolean
@@ -87,7 +61,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </div>
             {!collapsed && (
               <div className="flex-1 flex items-center justify-between min-w-0">
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">Postieur</span>
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight truncate">Caelpost</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg ml-1">
@@ -116,7 +90,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               <nav className="space-y-0.5">
                 {section.items.map((item) => {
                   const active = isActive(item.href)
-                  const Icon = ICON_MAP[item.icon as string] || CircleDashed
+                  const Icon = item.icon
 
                   const LinkContent = (
                     <Link

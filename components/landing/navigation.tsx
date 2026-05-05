@@ -8,9 +8,9 @@ export function Navigation() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-zinc-900 dark:bg-white flex items-center justify-center">
-            <span className="text-white dark:text-zinc-900 font-serif font-semibold text-sm">S</span>
+            <span className="text-white dark:text-zinc-900 font-serif font-semibold text-sm">C</span>
           </div>
-          <span className="font-serif font-semibold text-zinc-900 dark:text-white hidden sm:inline">Schedulify</span>
+          <span className="font-serif font-semibold text-zinc-900 dark:text-white hidden sm:inline">Caelpost</span>
         </Link>
 
         {/* Navigation Links */}

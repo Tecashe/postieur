@@ -54,7 +54,7 @@ export default function MembersPage() {
 
   // Determine the current user's role in this org
   const myMembership = members.find((m) => m.publicUserData?.userId === user?.id)
-  const myRole = myMembership?.role ?? 'org:viewer'
+  const myRole = myMembership?.role ?? 'org:member'
   const canManageRoles = myRole === 'org:owner' || myRole === 'org:admin'
 
   const filtered = members.filter((m) => {
@@ -118,7 +118,7 @@ export default function MembersPage() {
   return (
     <div className="space-y-5 pb-6">
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {Object.entries(ROLE_CONFIG).map(([role, cfg]) => {
           const Icon = cfg.icon
           return (
@@ -153,7 +153,7 @@ export default function MembersPage() {
               <div className="divide-y divide-border">
                 {filtered.map((membership) => {
                   const { publicUserData, role } = membership
-                  const cfg = ROLE_CONFIG[role] ?? ROLE_CONFIG['org:viewer']
+                  const cfg = ROLE_CONFIG[role] ?? ROLE_CONFIG['org:member']
                   const RoleIcon = cfg.icon
                   const name = [publicUserData?.firstName, publicUserData?.lastName].filter(Boolean).join(' ') || 'User'
                   const email = publicUserData?.identifier ?? ''
@@ -248,7 +248,7 @@ export default function MembersPage() {
               </div>
               <div className="divide-y divide-border">
                 {pendingInvites.map((invite) => {
-                  const cfg = ROLE_CONFIG[invite.role] ?? ROLE_CONFIG['org:editor']
+                  const cfg = ROLE_CONFIG[invite.role] ?? ROLE_CONFIG['org:member']
                   const Icon = cfg.icon
                   return (
                     <div key={invite.id} className="flex items-center gap-4 px-5 py-3 hover:bg-muted/20 transition-colors">
@@ -317,8 +317,7 @@ export default function MembersPage() {
               {([
                 ['org:owner',  'Owner',  'Full control, billing, delete workspace'],
                 ['org:admin',  'Admin',  'Manage members, all content access'],
-                ['org:editor', 'Editor', 'Create & schedule posts'],
-                ['org:viewer', 'Viewer', 'View-only access'],
+                ['org:member', 'Member', 'Create & schedule posts'],
               ] as [string, string, string][]).map(([roleKey, label, desc]) => {
                 const cfg = ROLE_CONFIG[roleKey]
                 const Icon = cfg.icon

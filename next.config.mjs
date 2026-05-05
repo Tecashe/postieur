@@ -7,9 +7,6 @@ const nextConfig = {
     unoptimized: true,
   },
   allowedDevOrigins: ['vm-8gdt45byq368zc71dizwh9yc.vusercontent.net'],
-  experimental: {
-    turbo: undefined,
-  },
 }
 
 export default nextConfig

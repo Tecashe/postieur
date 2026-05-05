@@ -7,16 +7,17 @@ import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { SIDEBAR_SECTIONS, CHANNELS_NAV } from '@/lib/constants'
 import { PLATFORMS } from '@/lib/constants'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { MOCK_USER } from '@/lib/mock-data'
+import { useUser, useOrganizationList, useClerk } from '@clerk/nextjs'
 import { useSidebar } from '@/hooks/use-sidebar'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -40,8 +41,19 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { isCollapsed, toggle } = useSidebar()
   const isMobile = useIsMobile()
   const { theme, setTheme } = useTheme()
+  const { user } = useUser()
+  const { signOut } = useClerk()
+  const { userMemberships, setActive, createOrganization } = useOrganizationList({
+    userMemberships: { infinite: true },
+  })
 
   const collapsed = !isMobile && isCollapsed
+
+  const userInitials = user?.fullName
+    ? user.fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.firstName?.[0]?.toUpperCase() ?? '?'
+
+  const activeOrg = userMemberships?.data?.find((m) => m.organization)?.organization
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -69,9 +81,19 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem>Workspace 1</DropdownMenuItem>
-                    <DropdownMenuItem>+ New Workspace</DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="w-52">
+                    {userMemberships?.data?.map((membership) => (
+                      <DropdownMenuItem
+                        key={membership.organization.id}
+                        onClick={() => setActive?.({ organization: membership.organization })}
+                      >
+                        {membership.organization.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => createOrganization?.({ name: 'New Workspace' })}>
+                      + New Workspace
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -236,15 +258,22 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 collapsed ? 'justify-center' : ''
               )}>
                 <Avatar className="flex-shrink-0 w-7 h-7 border border-border">
+                  {user?.imageUrl && (
+                    <AvatarImage src={user.imageUrl} alt={user.fullName ?? 'User'} />
+                  )}
                   <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
-                    {MOCK_USER.initials}
+                    {userInitials}
                   </AvatarFallback>
                 </Avatar>
                 {!collapsed && (
                   <>
                     <div className="flex-1 min-w-0 text-left">
-                      <p className="text-[12px] font-medium text-foreground truncate">{MOCK_USER.name}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{MOCK_USER.email}</p>
+                      <p className="text-[12px] font-medium text-foreground truncate">
+                        {user?.fullName ?? user?.firstName ?? 'User'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {user?.primaryEmailAddress?.emailAddress ?? ''}
+                      </p>
                     </div>
                     <MoreVertical className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
                   </>
@@ -253,8 +282,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side={collapsed ? 'right' : 'bottom'} className="w-52" sideOffset={8}>
               <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-              <DropdownMenuItem>Billing & Plans</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">Sign out</DropdownMenuItem>
+              <DropdownMenuItem>Billing &amp; Plans</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                onClick={() => signOut({ redirectUrl: '/sign-in' })}
+              >
+                Sign out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

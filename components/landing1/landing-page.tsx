@@ -1,14 +1,9 @@
 import { HeroSection } from './hero-section'
 import { LogoStrip } from './logo-strip'
 import { ProblemSolution } from './problem-solution'
-import { VisualWalkthrough } from './visual-walkthrough'
-import { BentoFeatures } from './bento-features'
-import { InterfaceShowcase } from './interface-showcase'
-import { ResultsSection } from './results-section'
-import { UseCases } from './use-cases'
-import { ComparisonTable } from './comparison-table'
-import { MetricsSection } from './metrics-section'
+import { FeaturesGrid } from './features-grid'
 import { Testimonials } from './testimonials'
+import { MetricsSection } from './metrics-section'
 import { Platforms } from './platforms'
 import { PricingSection } from './pricing-section'
 import { FAQSection } from './faq-section'
@@ -23,12 +18,7 @@ export default function LandingPage() {
       <HeroSection />
       <LogoStrip />
       <ProblemSolution />
-      <VisualWalkthrough />
-      <BentoFeatures />
-      <InterfaceShowcase />
-      <ResultsSection />
-      <UseCases />
-      <ComparisonTable />
+      <FeaturesGrid />
       <MetricsSection />
       <Testimonials />
       <Platforms />

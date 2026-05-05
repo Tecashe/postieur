@@ -56,7 +56,7 @@ const itemVariants = {
 
 export function FeaturesGrid() {
   return (
-    <section id="features" className="py-20 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-900 dark:to-zinc-950">
+    <section id="features" className="py-20 border-b border-zinc-200 dark:border-zinc-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 export function Footer() {
@@ -8,10 +9,10 @@ export function Footer() {
           {/* Brand */}
           <div>
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
-                <span className="text-zinc-900 font-serif font-semibold text-sm">S</span>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+                <Image src="/apple-touch-icon.png" alt="Caelpost Logo" width={32} height={32} className="object-cover" />
               </div>
-              <span className="font-serif font-semibold hidden sm:inline">Schedulify</span>
+              <span className="font-serif font-semibold hidden sm:inline">Caelpost</span>
             </Link>
             <p className="text-sm text-zinc-400">The premium social media scheduling platform built for creators.</p>
           </div>
@@ -51,7 +52,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-zinc-800 pt-8 flex flex-col sm:flex-row items-center justify-between">
-          <p className="text-sm text-zinc-400">© 2024 Schedulify. All rights reserved.</p>
+          <p className="text-sm text-zinc-400">© 2025 Caelpost. All rights reserved.</p>
           <div className="flex items-center gap-4 mt-4 sm:mt-0 text-sm text-zinc-400">
             <a href="#" className="hover:text-white transition-colors">Twitter</a>
             <a href="#" className="hover:text-white transition-colors">LinkedIn</a>

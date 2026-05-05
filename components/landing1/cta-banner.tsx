@@ -18,7 +18,7 @@ export function CTABanner() {
             Ready to grow smarter?
           </h2>
           <p className="text-lg sm:text-xl text-zinc-300 max-w-2xl mx-auto">
-            Join thousands of creators already scheduling smarter with Schedulify. Start free today.
+            Join thousands of creators already scheduling smarter with Caelpost. Start free today.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">

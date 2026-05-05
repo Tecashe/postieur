@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { SIDEBAR_SECTIONS, CHANNELS_NAV } from '@/lib/constants'
@@ -38,6 +38,7 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { isCollapsed, toggle } = useSidebar()
   const isMobile = useIsMobile()
   const { theme, setTheme } = useTheme()
@@ -91,7 +92,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       </DropdownMenuItem>
                     ))}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => createOrganization?.({ name: 'New Workspace' })}>
+                    <DropdownMenuItem onClick={() => router.push('/onboarding')}>
                       + New Workspace
                     </DropdownMenuItem>
                   </DropdownMenuContent>

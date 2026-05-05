@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -56,8 +57,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         {/* Header / Logo */}
         <div className={cn('h-16 flex items-center border-b border-zinc-200/50 dark:border-zinc-800/50 px-4', collapsed && 'justify-center')}>
           <div className="flex items-center gap-3 w-full">
-            <div className="w-8 h-8 rounded-xl bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center flex-shrink-0 shadow-sm ring-1 ring-zinc-900/10 dark:ring-white/10">
-              <span className="text-white dark:text-zinc-900 font-bold text-sm">P</span>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ring-1 ring-zinc-900/10 dark:ring-white/10">
+              <Image src="/apple-touch-icon.png" alt="Caelpost Logo" width={32} height={32} className="object-cover" />
             </div>
             {!collapsed && (
               <div className="flex-1 flex items-center justify-between min-w-0">
@@ -107,14 +108,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       {active && !collapsed && (
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-zinc-900 dark:bg-white rounded-r-full" />
                       )}
-                      
+
                       <div className={cn(
                         'flex items-center justify-center transition-transform duration-200',
                         !active && 'group-hover:scale-110'
                       )}>
                         <Icon className={cn('w-[18px] h-[18px]', active ? 'text-zinc-900 dark:text-zinc-50' : 'text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300')} />
                       </div>
-                      
+
                       {!collapsed && (
                         <span className="ml-3 text-sm">{item.label}</span>
                       )}
@@ -148,7 +149,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <nav className="space-y-0.5">
               {CHANNELS_NAV.map((channel) => {
                 const Icon = PLATFORMS[channel.platform]?.icon || CircleDashed
-                
+
                 const LinkContent = (
                   <Link
                     href={`/dashboard/channels/${channel.id}`}
@@ -165,7 +166,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                         <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#09090b]" />
                       )}
                     </div>
-                    
+
                     {!collapsed && (
                       <div className="ml-3 flex-1 flex items-center justify-between min-w-0">
                         <span className="text-sm truncate">{channel.handle}</span>

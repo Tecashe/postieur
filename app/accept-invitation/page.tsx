@@ -31,7 +31,8 @@ const CLERK_APPEARANCE = {
   },
   elements: {
     rootBox:          'w-full',
-    card:             'shadow-none border-0 bg-transparent p-0',
+    cardBox:          'w-full shadow-sm rounded-lg',
+    card:             `w-full shadow-none rounded-lg border`,
     header:           'hidden',
     headerTitle:      'hidden',
     headerSubtitle:   'hidden',
@@ -174,9 +175,8 @@ function AcceptInvitationContent() {
           </p>
         </div>
 
-        {/* Clerk card — constrained width, no shadow/border since card is transparent */}
-        <div className="w-full max-w-sm rounded-lg p-8 border shadow-sm"
-          style={{ background: CARD, borderColor: BORDER }}>
+        {/* Clerk SignIn — no outer wrapper, card styles applied via appearance */}
+        <div className="w-full max-w-sm">
           <SignIn
             routing="hash"
             forceRedirectUrl="/accept-invitation"

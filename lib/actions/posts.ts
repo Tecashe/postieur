@@ -35,6 +35,9 @@ const CreatePostSchema = z.object({
   labels: z.array(z.string()).default([]),
   crossPostDelayMinutes: z.number().int().min(0).default(0),
   channelIds: z.array(z.string()).default([]),
+  recycleEnabled: z.boolean().default(false),
+  recycleIntervalDays: z.number().int().min(1).optional(),
+  platformSettings: z.record(z.record(z.string())).default({}),
 })
 
 export type CreatePostInput = z.infer<typeof CreatePostSchema>
@@ -54,11 +57,20 @@ export async function createPost(input: CreatePostInput) {
       threadPosts: data.threadPosts,
       labels: data.labels,
       crossPostDelayMinutes: data.crossPostDelayMinutes,
+      recycleEnabled: data.recycleEnabled,
+      recycleIntervalDays: data.recycleIntervalDays ?? null,
+      recycleNextAt: data.recycleEnabled && data.recycleIntervalDays
+        ? new Date(Date.now() + data.recycleIntervalDays * 86400_000)
+        : null,
       createdById: userId,
       channels: data.channelIds.length > 0 ? {
         create: data.channelIds.map(channelId => ({
           channelId,
           status: data.status === 'SCHEDULED' ? 'SCHEDULED' : 'DRAFT',
+          config: data.platformSettings[
+            // find the platform for this channelId — stored as JSON per-platform key
+            channelId
+          ] ?? {},
         })),
       } : undefined,
     },

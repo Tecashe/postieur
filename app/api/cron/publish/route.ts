@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { fireWebhooks } from '@/lib/webhook-delivery'
 
 // Vercel Cron: runs every minute — protected by CRON_SECRET env var
 export async function GET(request: NextRequest) {
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
           update: {},
         })
 
+        await fireWebhooks(post.workspaceId, 'post.published', { postId: post.id, publishedAt: now.toISOString() }).catch(() => {})
         results.push({ id: post.id, status: 'PUBLISHED' })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error'
@@ -72,6 +74,7 @@ export async function GET(request: NextRequest) {
           where: { id: post.id },
           data: { status: 'FAILED' },
         })
+        await fireWebhooks(post.workspaceId, 'post.failed', { postId: post.id, error: message }).catch(() => {})
         results.push({ id: post.id, status: 'FAILED', error: message })
       }
     }

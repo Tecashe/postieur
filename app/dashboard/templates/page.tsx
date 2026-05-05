@@ -1,121 +1,151 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Plus, Copy, Edit3, Trash2, Tag } from 'lucide-react'
-import { PLATFORMS } from '@/lib/constants'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Search, Plus, Copy, Edit3, Trash2, Tag, RefreshCw, LayoutTemplate } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import type { Platform } from '@/lib/types'
 
-const MOCK_TEMPLATES = [
-  {
-    id: '1', name: 'Product Launch', category: 'Marketing',
-    content: '🚀 Exciting news! We are launching {product_name} — the {adjective} solution for {target_audience}. {cta}',
-    platforms: ['instagram', 'linkedin', 'x'] as Platform[],
-    usageCount: 24, tags: ['launch', 'product', 'announcement'],
-  },
-  {
-    id: '2', name: 'Weekly Tip', category: 'Education',
-    content: '💡 This week\'s tip: {tip_content}\n\nSave this for later! What\'s your biggest challenge with {topic}? Let us know below. 👇',
-    platforms: ['instagram', 'facebook', 'linkedin'] as Platform[],
-    usageCount: 18, tags: ['tip', 'education', 'engagement'],
-  },
-  {
-    id: '3', name: 'Behind the Scenes', category: 'Brand',
-    content: 'Take a peek behind the curtain at {company}! 🎬\n\n{bts_description}\n\nDrop a ❤️ if you love seeing how the magic happens!',
-    platforms: ['instagram', 'tiktok'] as Platform[],
-    usageCount: 11, tags: ['bts', 'brand', 'authentic'],
-  },
-  {
-    id: '4', name: 'Testimonial Highlight', category: 'Social Proof',
-    content: '⭐ "{testimonial_quote}" — {customer_name}, {customer_title}\n\nJoin {number}+ happy customers. {cta}',
-    platforms: ['instagram', 'linkedin', 'facebook', 'x'] as Platform[],
-    usageCount: 32, tags: ['testimonial', 'social-proof'],
-  },
-  {
-    id: '5', name: 'Q&A Thread', category: 'Engagement',
-    content: 'I get asked "{question}" a lot. Here\'s my honest answer 🧵\n\n1/ {answer_start}',
-    platforms: ['x', 'threads'] as Platform[],
-    usageCount: 7, tags: ['thread', 'qa', 'engagement'],
-  },
-  {
-    id: '6', name: 'Industry News', category: 'Thought Leadership',
-    content: '📰 Big news in {industry}: {news_headline}\n\nHere\'s what this means for {audience}: {analysis}\n\nThoughts? 👇',
-    platforms: ['linkedin', 'x'] as Platform[],
-    usageCount: 15, tags: ['news', 'thought-leadership'],
-  },
-]
+interface Template { id: string; name: string; category: string; content: string; platforms: string[]; tags: string[]; usageCount: number; createdAt: string }
 
-const CATEGORIES = ['All', ...Array.from(new Set(MOCK_TEMPLATES.map(t => t.category)))]
+const CATEGORIES = ['general', 'marketing', 'education', 'brand', 'engagement', 'social-proof', 'news']
 
 export default function TemplatesPage() {
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('All')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [showDialog, setShowDialog] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ name: '', content: '', category: 'general', platforms: [] as string[], tags: [] as string[] })
 
-  const filtered = MOCK_TEMPLATES.filter(t =>
-    (category === 'All' || t.category === category) &&
-    (!search || t.name.toLowerCase().includes(search.toLowerCase()) || t.content.toLowerCase().includes(search.toLowerCase()))
-  )
+  const load = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch('/api/templates').then(r => r.json())
+    setTemplates(r.templates ?? [])
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const filtered = templates.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.content.toLowerCase().includes(search.toLowerCase()))
+
+  const openCreate = () => { setEditingId(null); setForm({ name: '', content: '', category: 'general', platforms: [], tags: [] }); setShowDialog(true) }
+  const openEdit = (t: Template) => { setEditingId(t.id); setForm({ name: t.name, content: t.content, category: t.category, platforms: t.platforms, tags: t.tags }); setShowDialog(true) }
+
+  const handleSave = async () => {
+    if (!form.name || !form.content) return
+    setSaving(true)
+    if (editingId) {
+      await fetch(`/api/templates/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    } else {
+      await fetch('/api/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+    }
+    setSaving(false); setShowDialog(false); await load()
+  }
+
+  const handleDelete = async (id: string) => {
+    await fetch(`/api/templates/${id}`, { method: 'DELETE' })
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  const handleUse = async (id: string) => {
+    await fetch(`/api/templates/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'use' }) })
+    setTemplates(prev => prev.map(t => t.id === id ? { ...t, usageCount: t.usageCount + 1 } : t))
+  }
 
   return (
-    <div className="space-y-4 pb-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 max-w-sm min-w-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/60" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search templates..." className="pl-8 h-8 text-xs bg-input border-border" />
+    <div className="space-y-5 pb-6">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input placeholder="Search templates..." className="pl-8 h-8 text-sm" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {CATEGORIES.map(cat => (
-            <button key={cat} onClick={() => setCategory(cat)}
-              className={cn('px-3 py-1.5 text-xs rounded-sm border transition-all',
-                category === cat ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
-              {cat}
-            </button>
+        <Button size="sm" className="gap-1.5 text-xs ml-auto" onClick={openCreate}><Plus className="w-3.5 h-3.5" /> New Template</Button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-40 rounded-lg bg-muted/40 animate-pulse" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card className="p-12 text-center">
+          <LayoutTemplate className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">No templates yet</p>
+          <Button size="sm" className="mt-4 gap-1.5 text-xs" onClick={openCreate}><Plus className="w-3.5 h-3.5" /> Create your first template</Button>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {filtered.map(t => (
+            <Card key={t.id} className="p-4 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-sm">{t.name}</p>
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5 mt-1">{t.category}</Badge>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(t)}><Edit3 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(t.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-3 flex-1">{t.content}</p>
+              {t.tags.length > 0 && (
+                <div className="flex gap-1 flex-wrap">
+                  {t.tags.map(tag => <span key={tag} className="text-[10px] bg-muted px-1.5 py-0.5 rounded flex items-center gap-0.5"><Tag className="w-2.5 h-2.5" />{tag}</span>)}
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                <span className="text-[10px] text-muted-foreground">Used {t.usageCount} time{t.usageCount !== 1 ? 's' : ''}</span>
+                <Link href={`/dashboard/compose?template=${t.id}`} onClick={() => handleUse(t.id)}>
+                  <Button size="sm" variant="outline" className="h-6 text-xs gap-1"><Copy className="w-3 h-3" /> Use template</Button>
+                </Link>
+              </div>
+            </Card>
           ))}
         </div>
-        <Button size="sm" className="gap-1.5 text-xs ml-auto"><Plus className="w-3.5 h-3.5" /> New Template</Button>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.map(tpl => (
-          <Card key={tpl.id} className="bg-card border-border shadow-sm p-4 flex flex-col hover:border-border transition-all group">
-            <div className="flex items-start gap-2 mb-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground truncate">{tpl.name}</p>
-                <Badge className="mt-0.5 text-[10px] border-0 bg-accent/10 text-accent">{tpl.category}</Badge>
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{editingId ? 'Edit Template' : 'New Template'}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Name</Label>
+                <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Template name" />
               </div>
-              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"><Copy className="w-3 h-3" /></Button>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"><Edit3 className="w-3 h-3" /></Button>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"><Trash2 className="w-3 h-3" /></Button>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Category</Label>
+                <select className="w-full h-8 text-sm rounded-md border border-input bg-background px-2"
+                  value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
             </div>
-
-            <p className="text-[11px] text-muted-foreground line-clamp-3 leading-relaxed flex-1 font-mono bg-muted/30 rounded-sm p-2">{tpl.content}</p>
-
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
-              <div className="flex gap-0.5 flex-1">
-                {tpl.platforms.slice(0, 4).map(p => {
-                  const Icon = PLATFORMS[p]?.icon
-                  return Icon ? <Icon key={p} className="w-3 h-3 text-muted-foreground/50" /> : null
-                })}
-              </div>
-              <span className="text-[10px] text-muted-foreground">{tpl.usageCount} uses</span>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Content</Label>
+              <Textarea className="text-sm min-h-[120px] resize-none" value={form.content}
+                onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="Use {variable} for dynamic placeholders" />
             </div>
-
-            <div className="flex flex-wrap gap-1 mt-2">
-              {tpl.tags.slice(0, 3).map(tag => (
-                <span key={tag} className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground/60 bg-muted/40 px-1.5 py-0.5 rounded-sm">
-                  <Tag className="w-2 h-2" />{tag}
-                </span>
-              ))}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tags (comma separated)</Label>
+              <Input className="h-8 text-sm" value={form.tags.join(', ')}
+                onChange={e => setForm(f => ({ ...f, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))} placeholder="launch, product, announcement" />
             </div>
-          </Card>
-        ))}
-      </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={!form.name || !form.content || saving}>
+              {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}{editingId ? 'Save' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

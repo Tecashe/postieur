@@ -1,179 +1,155 @@
-'use client'
+﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Link2, Plus, Trash2, GripVertical, Eye, Edit3, ExternalLink,
-  Instagram, Twitter, Linkedin, Youtube, Globe,
-} from 'lucide-react'
-import { MOCK_LINK_IN_BIO } from '@/lib/mock-data'
-import { cn } from '@/lib/utils'
-import type { LinkInBioLink } from '@/lib/types'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Link2, Plus, Trash2, RefreshCw, GripVertical, Eye, ExternalLink } from 'lucide-react'
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  instagram: Instagram,
-  twitter: Twitter,
-  linkedin: Linkedin,
-  youtube: Youtube,
-}
+interface LinkItem { id: string; title: string; url: string; platform: string | null; clicks: number; sortOrder: number; isActive: boolean }
+interface Page { id: string; slug: string; title: string; bio: string | null; avatarUrl: string | null; themeColor: string | null; isPublished: boolean; pageViews: number; links: LinkItem[] }
 
-function LinkRow({ link, onRemove }: { link: LinkInBioLink; onRemove: () => void }) {
-  const IconComp = link.platform ? ICON_MAP[link.platform] : Globe
-  return (
-    <div className="flex items-center gap-2.5 px-3 py-2.5 border border-border rounded-sm bg-card hover:bg-muted/20 transition-colors group">
-      <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 cursor-grab flex-shrink-0" />
-      <div className="w-7 h-7 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
-        {IconComp && <IconComp className="w-3.5 h-3.5 text-muted-foreground" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-foreground truncate">{link.title}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{link.url}</p>
-      </div>
-      {link.clicks !== undefined && (
-        <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{link.clicks} clicks</span>
-      )}
-      <button onClick={onRemove} className="text-muted-foreground/30 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100">
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  )
-}
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
 export default function LinkInBioPage() {
-  const page = MOCK_LINK_IN_BIO
-  const [links, setLinks] = useState<LinkInBioLink[]>(page?.links ?? [])
-  const [newTitle, setNewTitle] = useState('')
-  const [newUrl, setNewUrl] = useState('')
-  const [showPreview, setShowPreview] = useState(true)
+  const [page, setPage] = useState<Page | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showSetup, setShowSetup] = useState(false)
+  const [showLinkDialog, setShowLinkDialog] = useState(false)
+  const [pageForm, setPageForm] = useState({ slug: '', title: '', bio: '', themeColor: '#E4405F' })
+  const [linkForm, setLinkForm] = useState({ title: '', url: '', platform: '' })
 
-  const addLink = () => {
-    if (!newTitle || !newUrl) return
-    setLinks(prev => [...prev, {
-      id: `link-${Date.now()}`,
-      title: newTitle,
-      url: newUrl,
-      isActive: true,
-    }])
-    setNewTitle('')
-    setNewUrl('')
+  const load = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch('/api/link-in-bio').then(r => r.json())
+    setPage(r.page ?? null)
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const handleSavePage = async () => {
+    setSaving(true)
+    await fetch('/api/link-in-bio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'upsert', ...pageForm }) })
+    setSaving(false); setShowSetup(false); await load()
   }
 
-  const removeLink = (id: string) => setLinks(prev => prev.filter(l => l.id !== id))
+  const handleAddLink = async () => {
+    if (!page || !linkForm.title || !linkForm.url) return
+    setSaving(true)
+    await fetch('/api/link-in-bio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add-link', pageId: page.id, ...linkForm }) })
+    setSaving(false); setShowLinkDialog(false); await load()
+  }
 
-  const totalClicks = links.reduce((s, l) => s + (l.clicks ?? 0), 0)
+  const handleRemoveLink = async (id: string) => {
+    await fetch('/api/link-in-bio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove-link', id }) })
+    setPage(prev => prev ? { ...prev, links: prev.links.filter(l => l.id !== id) } : prev)
+  }
+
+  const handleToggleLink = async (id: string, isActive: boolean) => {
+    await fetch('/api/link-in-bio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update-link', id, isActive }) })
+    setPage(prev => prev ? { ...prev, links: prev.links.map(l => l.id === id ? { ...l, isActive } : l) } : prev)
+  }
+
+  if (loading) return <div className="space-y-3">{Array.from({length:3}).map((_,i)=><div key={i} className="h-16 rounded-lg bg-muted/40 animate-pulse"/>)}</div>
+
+  if (!page) return (
+    <Card className="p-12 text-center">
+      <Link2 className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
+      <p className="text-sm text-muted-foreground font-medium">No Link in Bio page yet</p>
+      <p className="text-xs text-muted-foreground/60 mt-1">Create a single shareable page with all your links</p>
+      <Button size="sm" className="mt-4 gap-1.5 text-xs" onClick={() => { setPageForm({ slug: '', title: '', bio: '', themeColor: '#E4405F' }); setShowSetup(true) }}>
+        <Plus className="w-3.5 h-3.5" /> Create Page
+      </Button>
+      <Dialog open={showSetup} onOpenChange={setShowSetup}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Create Link in Bio Page</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5"><Label className="text-xs">Page title</Label><Input className="h-8 text-sm" value={pageForm.title} onChange={e=>setPageForm(f=>({...f,title:e.target.value}))} placeholder="My Links" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Slug (URL path)</Label>
+              <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">/l/</span><Input className="h-8 text-sm" value={pageForm.slug} onChange={e=>setPageForm(f=>({...f,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')}))} placeholder="yourname" /></div>
+            </div>
+            <div className="space-y-1.5"><Label className="text-xs">Bio (optional)</Label><Input className="h-8 text-sm" value={pageForm.bio} onChange={e=>setPageForm(f=>({...f,bio:e.target.value}))} placeholder="Short description" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={()=>setShowSetup(false)}>Cancel</Button>
+            <Button onClick={handleSavePage} disabled={!pageForm.title||!pageForm.slug||saving}>{saving?<RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5"/>:null}Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+
+  const publicUrl = `${APP_URL}/l/${page.slug}`
 
   return (
-    <div className="space-y-4 pb-6">
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="bg-card border-border shadow-sm p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Links</p>
-          <p className="text-2xl font-light text-foreground mt-1">{links.length}</p>
-        </Card>
-        <Card className="bg-accent/5 border-accent/20 shadow-sm p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Total Clicks</p>
-          <p className="text-2xl font-light text-accent mt-1">{totalClicks.toLocaleString()}</p>
-        </Card>
-        <Card className="bg-card border-border shadow-sm p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Page Views</p>
-          <p className="text-2xl font-light text-foreground mt-1">{(page?.pageViews ?? 0).toLocaleString()}</p>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-5">
-        {/* Editor */}
-        <div className="space-y-4">
-          {/* Page info */}
-          <Card className="bg-card border-border shadow-sm p-4">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest mb-3">Page Settings</p>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Display Name</Label>
-                <Input defaultValue={page?.title ?? ''} className="mt-1 h-8 text-xs bg-input border-border" />
-              </div>
-              <div>
-                <Label className="text-xs">Bio</Label>
-                <Input defaultValue={page?.bio ?? ''} className="mt-1 h-8 text-xs bg-input border-border" />
-              </div>
-              <div>
-                <Label className="text-xs">Page URL</Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs text-muted-foreground">caelpost.com/</span>
-                  <Input defaultValue={page?.slug ?? ''} className="flex-1 h-8 text-xs bg-input border-border" />
-                  <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-border">
-                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Links */}
-          <Card className="bg-card border-border shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Links</p>
-              <p className="text-[10px] text-muted-foreground">Drag to reorder</p>
-            </div>
-            <div className="space-y-2 mb-4">
-              {links.map(link => (
-                <LinkRow key={link.id} link={link} onRemove={() => removeLink(link.id)} />
-              ))}
-            </div>
-
-            {/* Add link form */}
-            <div className="border-t border-border pt-3 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Title" className="h-8 text-xs bg-input border-border" />
-                <Input value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="https://..." className="h-8 text-xs bg-input border-border" />
-              </div>
-              <Button onClick={addLink} disabled={!newTitle || !newUrl} size="sm" variant="outline" className="w-full text-xs gap-1.5 border-border">
-                <Plus className="w-3.5 h-3.5" /> Add Link
-              </Button>
-            </div>
-          </Card>
-
-          <Button className="w-full text-xs gap-1.5">
-            <Eye className="w-3.5 h-3.5" /> Save & Publish
-          </Button>
+    <div className="space-y-5 pb-6">
+      <Card className="p-4 flex items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm">{page.title}</p>
+          <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5">
+            {publicUrl}<ExternalLink className="w-3 h-3"/>
+          </a>
+          <p className="text-[10px] text-muted-foreground mt-1">{page.pageViews} page views · {page.links.length} links</p>
         </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={()=>{ setPageForm({ slug: page.slug, title: page.title, bio: page.bio??'', themeColor: page.themeColor??'#E4405F' }); setShowSetup(true) }}>Edit Page</Button>
+          <Button size="sm" className="gap-1.5 text-xs h-7" onClick={()=>{ setLinkForm({title:'',url:'',platform:''}); setShowLinkDialog(true) }}><Plus className="w-3.5 h-3.5"/>Add Link</Button>
+        </div>
+      </Card>
 
-        {/* Phone preview */}
-        {showPreview && (
-          <div className="flex flex-col items-center">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest mb-3 text-center">Preview</p>
-            <div className="w-52 border-2 border-border rounded-[24px] overflow-hidden bg-background shadow-md">
-              <div className="h-4 bg-muted flex items-center justify-center">
-                <div className="w-12 h-1 bg-muted-foreground/30 rounded-full" />
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/15 mx-auto mb-2 flex items-center justify-center">
-                    <span className="text-base font-serif text-primary">{(page?.title ?? 'C').charAt(0)}</span>
-                  </div>
-                  <p className="text-[11px] font-medium text-foreground">{page?.title}</p>
-                  <p className="text-[9px] text-muted-foreground mt-0.5">{page?.bio}</p>
-                </div>
-                <div className="space-y-1.5">
-                  {links.slice(0, 5).map(link => {
-                    const IconComp = link.platform ? ICON_MAP[link.platform] : Globe
-                    return (
-                      <div key={link.id} className="w-full px-3 py-2 rounded-sm border border-border bg-card flex items-center gap-2">
-                        {IconComp && <IconComp className="w-3 h-3 text-muted-foreground" />}
-                        <span className="text-[10px] text-foreground truncate">{link.title}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+      <div className="space-y-2">
+        {page.links.length === 0 ? (
+          <Card className="p-8 text-center text-muted-foreground">
+            <p className="text-sm">No links yet — add your first link</p>
+          </Card>
+        ) : page.links.map(link => (
+          <Card key={link.id} className="p-3 flex items-center gap-3">
+            <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{link.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{link.url}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{link.clicks} clicks</p>
             </div>
-          </div>
-        )}
+            <Switch checked={link.isActive} onCheckedChange={v=>handleToggleLink(link.id,v)} className="scale-75" />
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={()=>handleRemoveLink(link.id)}><Trash2 className="w-3.5 h-3.5"/></Button>
+          </Card>
+        ))}
       </div>
+
+      <Dialog open={showSetup} onOpenChange={setShowSetup}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit Page</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5"><Label className="text-xs">Page title</Label><Input className="h-8 text-sm" value={pageForm.title} onChange={e=>setPageForm(f=>({...f,title:e.target.value}))} /></div>
+            <div className="space-y-1.5"><Label className="text-xs">Slug</Label>
+              <div className="flex items-center gap-1"><span className="text-xs text-muted-foreground">/l/</span><Input className="h-8 text-sm" value={pageForm.slug} onChange={e=>setPageForm(f=>({...f,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')}))} /></div>
+            </div>
+            <div className="space-y-1.5"><Label className="text-xs">Bio</Label><Input className="h-8 text-sm" value={pageForm.bio} onChange={e=>setPageForm(f=>({...f,bio:e.target.value}))} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={()=>setShowSetup(false)}>Cancel</Button>
+            <Button onClick={handleSavePage} disabled={saving}>{saving?<RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5"/>:null}Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add Link</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5"><Label className="text-xs">Link title</Label><Input className="h-8 text-sm" value={linkForm.title} onChange={e=>setLinkForm(f=>({...f,title:e.target.value}))} placeholder="My Website" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">URL</Label><Input className="h-8 text-sm" value={linkForm.url} onChange={e=>setLinkForm(f=>({...f,url:e.target.value}))} placeholder="https://" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={()=>setShowLinkDialog(false)}>Cancel</Button>
+            <Button onClick={handleAddLink} disabled={!linkForm.title||!linkForm.url||saving}>{saving?<RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5"/>:null}Add Link</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

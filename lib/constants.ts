@@ -5,7 +5,7 @@
   Tv, Camera, Phone, Zap, Rocket,
   LayoutDashboard, CalendarDays, PenLine, ListOrdered, BarChart3,
   ImageIcon, LayoutTemplate, FilePen, Radio, Users, Settings,
-  Inbox, Target, Link2, Sparkles, Rss, Key,
+  Inbox, Target, Link2, Sparkles, Rss, Key, Bot, Palette,
 } from 'lucide-react'
 import { Platform } from './types'
 
@@ -121,6 +121,7 @@ export const SIDEBAR_SECTIONS: { title: string; items: { label: string; href: st
       { label: 'Campaigns',   href: '/dashboard/campaigns',    icon: Target },
       { label: 'Link in Bio', href: '/dashboard/link-in-bio',  icon: Link2 },
       { label: 'AI Studio',   href: '/dashboard/ai-studio',    icon: Sparkles },
+      { label: 'AI Agent',    href: '/dashboard/ai-agent',     icon: Bot },
     ],
   },
   {
@@ -137,6 +138,7 @@ export const SIDEBAR_SECTIONS: { title: string; items: { label: string; href: st
       { label: 'Media Library', href: '/dashboard/media',      icon: ImageIcon },
       { label: 'Templates',     href: '/dashboard/templates',  icon: LayoutTemplate },
       { label: 'Drafts',        href: '/dashboard/drafts',     icon: FilePen },
+      { label: 'Design Studio', href: '/dashboard/design',     icon: Palette },
     ],
   },
   {

@@ -53,10 +53,19 @@ model Workspace {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  channels   Channel[]
-  posts      Post[]
-  mediaItems MediaItem[]
-  aiUsage    AIUsageLog[]
+  channels        Channel[]
+  posts           Post[]
+  mediaItems      MediaItem[]
+  aiUsage         AIUsageLog[]
+  apiKeys         ApiKey[]
+  webhooks        WebhookEndpoint[]
+  rssFeeds        RssFeed[]
+  autoActions     AutoAction[]
+  linkInBioPages  LinkInBioPage[]
+  templates       Template[]
+  campaigns       Campaign[]
+  inboxMessages   InboxMessage[]
+  queueSlots      QueueSlot[]
 
   @@map("workspaces")
 }
@@ -103,6 +112,10 @@ model Post {
   campaignId            String?
   crossPostDelayMinutes Int        @default(0)
   createdById           String?
+  recycleEnabled        Boolean    @default(false)
+  recycleIntervalDays   Int?
+  recycleNextAt         DateTime?
+  recycleSourceId       String?
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
@@ -125,6 +138,7 @@ model PostChannel {
   platformPostId String?
   publishedAt    DateTime?
   failReason     String?
+  config         Json?      @default("{}")
 
   post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -192,4 +206,279 @@ model AIUsageLog {
 
   @@index([workspaceId, createdAt])
   @@map("ai_usage_logs")
+}
+
+// --- ApiKey ---
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+model ApiKey {
+  id          String       @id @default(cuid())
+  workspaceId String
+  name        String
+  keyHash     String       @unique
+  prefix      String
+  scopes      String[]     @default([])
+  status      ApiKeyStatus @default(ACTIVE)
+  lastUsedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("api_keys")
+}
+
+// --- WebhookEndpoint ---
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model WebhookEndpoint {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  name            String
+  url             String
+  events          String[] @default([])
+  secret          String
+  isActive        Boolean  @default(true)
+  successCount    Int      @default(0)
+  failureCount    Int      @default(0)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id           String                @id @default(cuid())
+  webhookId    String
+  event        String
+  payload      Json
+  responseCode Int?
+  status       WebhookDeliveryStatus @default(PENDING)
+  error        String?
+  createdAt    DateTime              @default(now())
+
+  webhook WebhookEndpoint @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@map("webhook_deliveries")
+}
+
+// --- RssFeed ---
+
+model RssFeed {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  name                   String
+  url                    String
+  isEnabled              Boolean  @default(true)
+  checkIntervalHours     Int      @default(6)
+  autoPublishChannelIds  String[] @default([])
+  lastFetchedAt          DateTime?
+  lastError              String?
+  postsCreated           Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("rss_feeds")
+}
+
+// --- AutoAction ---
+
+enum AutoActionTrigger {
+  POST_PUBLISHED
+  FOLLOWER_MILESTONE
+  SCHEDULED_TIME
+  RSS_ITEM_CREATED
+}
+
+enum AutoActionType {
+  NOTIFY_WEBHOOK
+  CREATE_POST
+  SEND_EMAIL
+  AUTO_LIKE
+  AUTO_COMMENT
+}
+
+model AutoAction {
+  id           String            @id @default(cuid())
+  workspaceId  String
+  name         String
+  isEnabled    Boolean           @default(true)
+  triggerType  AutoActionTrigger
+  triggerValue String?
+  actionType   AutoActionType
+  channelIds   String[]          @default([])
+  config       Json              @default("{}")
+  lastRunAt    DateTime?
+  runCount     Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("auto_actions")
+}
+
+// --- LinkInBioPage ---
+
+model LinkInBioPage {
+  id          String   @id @default(cuid())
+  workspaceId String
+  slug        String   @unique
+  title       String
+  bio         String?
+  avatarUrl   String?
+  pageViews   Int      @default(0)
+  isPublished Boolean  @default(true)
+  themeColor  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  links     LinkInBioLink[]
+
+  @@index([workspaceId])
+  @@map("link_in_bio_pages")
+}
+
+model LinkInBioLink {
+  id        String  @id @default(cuid())
+  pageId    String
+  title     String
+  url       String
+  platform  String?
+  clicks    Int     @default(0)
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  page LinkInBioPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@map("link_in_bio_links")
+}
+
+// --- Template ---
+
+model Template {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  category    String   @default("general")
+  content     String
+  platforms   String[] @default([])
+  tags        String[] @default([])
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("templates")
+}
+
+// --- Campaign ---
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  status      CampaignStatus @default(DRAFT)
+  startDate   DateTime?
+  endDate     DateTime?
+  platforms   String[]       @default([])
+  color       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("campaigns")
+}
+
+// --- InboxMessage ---
+
+enum InboxMessageType {
+  COMMENT
+  MENTION
+  DM
+  REPLY
+}
+
+enum InboxSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+model InboxMessage {
+  id          String           @id @default(cuid())
+  workspaceId String
+  channelId   String?
+  platform    String
+  type        InboxMessageType @default(COMMENT)
+  authorId    String?
+  authorName  String
+  authorAvatar String?
+  content     String
+  postContent String?
+  sentiment   InboxSentiment   @default(NEUTRAL)
+  isRead      Boolean          @default(false)
+  isArchived  Boolean          @default(false)
+  externalId  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, platform, externalId])
+  @@index([workspaceId, isRead])
+  @@map("inbox_messages")
+}
+
+// --- QueueSlot ---
+
+model QueueSlot {
+  id          String   @id @default(cuid())
+  workspaceId String
+  dayOfWeek   Int
+  hour        Int
+  minute      Int      @default(0)
+  platforms   String[] @default([])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, dayOfWeek, hour, minute])
+  @@index([workspaceId])
+  @@map("queue_slots")
 }

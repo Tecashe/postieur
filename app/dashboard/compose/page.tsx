@@ -19,7 +19,7 @@ import {
 import {
   Clock, Zap, X, Image as ImageIcon, Smile, Hash, Link2, Sparkles,
   Plus, Send, Calendar, RefreshCw, AlignLeft, Layers, CheckCircle2,
-  TrendingUp, BarChart3, ChevronDown, GripVertical, Minus, Globe,
+  TrendingUp, BarChart3, ChevronDown, GripVertical, Minus, Globe, Wand2,
 } from 'lucide-react'
 import { PLATFORMS, PLATFORM_CHAR_LIMITS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
@@ -95,6 +95,8 @@ export default function ComposePage() {
   const [selectedTone, setSelectedTone] = useState('Professional')
   const [enableSignature, setEnableSignature] = useState(false)
   const [crossPostDelay, setCrossPostDelay] = useState('0')
+  const [recycleEnabled, setRecycleEnabled] = useState(false)
+  const [recycleIntervalDays, setRecycleIntervalDays] = useState(30)
   const [showAI, setShowAI] = useState(true)
   const [aiGenerating, setAiGenerating] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
@@ -148,6 +150,57 @@ export default function ComposePage() {
   const handleSimulateAI = () => handleAI('variants')
 
   const [isSaving, setIsSaving] = useState(false)
+  const [imageGenPrompt, setImageGenPrompt] = useState('')
+  const [imageGenLoading, setImageGenLoading] = useState(false)
+  const [showImagePrompt, setShowImagePrompt] = useState(false)
+
+  // Per-platform settings (stored in PostChannel.config)
+  const [platformSettings, setPlatformSettings] = useState<Record<string, Record<string, string>>>({})
+  const [platformMeta, setPlatformMeta] = useState<Record<string, { lists?: {id:string;name:string}[]; communities?: {id:string;name:string}[]; companies?: {id:string;name:string}[]; subreddits?: {id:string;name:string}[]; playlists?: {id:string;name:string}[]; categories?: {id:string;name:string}[] }>>({})
+
+  const fetchPlatformMeta = async (platform: string, type: string, subreddit?: string) => {
+    const key = `${platform}_${type}`
+    const url = `/api/platform-meta?platform=${platform}&type=${type}${subreddit ? `&subreddit=${subreddit}` : ''}`
+    try {
+      const r = await fetch(url).then(r => r.json()) as { items?: {id:string;name:string}[] }
+      setPlatformMeta(prev => ({
+        ...prev,
+        [platform]: { ...prev[platform], [type]: r.items ?? [] },
+      }))
+    } catch {}
+  }
+
+  const setPlatformSetting = (platform: string, key: string, value: string) => {
+    setPlatformSettings(prev => ({
+      ...prev,
+      [platform]: { ...prev[platform], [key]: value },
+    }))
+  }
+
+  const handleGenerateImage = async () => {
+    const prompt = imageGenPrompt.trim() || content.trim()
+    if (!prompt) return
+    setImageGenLoading(true)
+    try {
+      const res = await fetch('/api/ai/compose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'image', content: prompt, imagePrompt: imageGenPrompt.trim() || undefined }),
+      })
+      const data = await res.json() as { url?: string; error?: string }
+      if (data.error) throw new Error(data.error)
+      if (data.url) {
+        setMediaFiles(prev => [...prev, data.url!])
+        setShowImagePrompt(false)
+        setImageGenPrompt('')
+        toast.success('Image generated')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Image generation failed')
+    } finally {
+      setImageGenLoading(false)
+    }
+  }
 
   const handleSubmit = async (mode: 'now' | 'schedule' | 'queue') => {
     if (selectedChannels.length === 0) return
@@ -171,6 +224,9 @@ export default function ComposePage() {
         crossPostDelayMinutes: parseInt(crossPostDelay) || 0,
         channelIds: selectedChannels,
         labels: [],
+        recycleEnabled,
+        recycleIntervalDays: recycleEnabled ? recycleIntervalDays : undefined,
+        platformSettings,
       })
 
       if (result.success) {
@@ -391,6 +447,9 @@ export default function ComposePage() {
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" onClick={() => fileRef.current?.click()}>
                   <ImageIcon className="w-3.5 h-3.5" />
                 </Button>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-accent" title="Generate image with AI" onClick={() => setShowImagePrompt(p => !p)}>
+                  <Wand2 className="w-3.5 h-3.5" />
+                </Button>
                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground">
                   <Smile className="w-3.5 h-3.5" />
                 </Button>
@@ -409,6 +468,23 @@ export default function ComposePage() {
                   {charCount}/{strictestLimit}
                 </span>
               </div>
+
+              {/* Image Prompt */}
+              {showImagePrompt && (
+                <div className="px-3 pb-3 pt-2 border-t border-border flex gap-2">
+                  <Input
+                    value={imageGenPrompt}
+                    onChange={e => setImageGenPrompt(e.target.value)}
+                    placeholder="Describe image (or leave blank to use post text)…"
+                    className="h-7 text-xs bg-input border-border flex-1"
+                    onKeyDown={e => e.key === 'Enter' && handleGenerateImage()}
+                  />
+                  <Button size="sm" className="h-7 text-xs gap-1 px-2.5" onClick={handleGenerateImage} disabled={imageGenLoading}>
+                    {imageGenLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                    {imageGenLoading ? 'Generating…' : 'Generate'}
+                  </Button>
+                </div>
+              )}
 
               {/* Media Preview */}
               {mediaFiles.length > 0 && (
@@ -677,6 +753,168 @@ export default function ComposePage() {
             </div>
           </Card>
 
+          {/* Per-platform settings */}
+          {selectedPlatforms.length > 0 && (
+            <Card className="bg-card border-border shadow-sm">
+              <div className="px-4 pt-3 pb-2 border-b border-border">
+                <h3 className="text-sm font-medium text-foreground">Platform Settings</h3>
+              </div>
+              <div className="divide-y divide-border">
+                {connectedChannels.filter(c => selectedChannels.includes(c.id)).map(ch => {
+                  const plat = PLATFORMS[ch.platform]
+                  if (!plat) return null
+                  const Icon = plat.icon
+                  const s = platformSettings[ch.platform] ?? {}
+                  const meta = platformMeta[ch.platform] ?? {}
+                  return (
+                    <div key={ch.id} className="px-4 py-3 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <Icon className="w-3 h-3 text-muted-foreground" />
+                        <p className="text-xs font-medium">{plat.name}</p>
+                      </div>
+
+                      {/* Twitter/X */}
+                      {ch.platform === 'x' && (
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Who can reply</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.replySettings ?? 'Everyone'}
+                              onChange={e => setPlatformSetting('x', 'replySettings', e.target.value)}>
+                              {['Everyone','MentionedUsers','Subscribers'].map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Post to List (optional)</p>
+                            <div className="flex gap-1">
+                              <select className="flex-1 h-7 text-xs rounded border border-input bg-background px-2"
+                                value={s.listId ?? ''}
+                                onChange={e => setPlatformSetting('x', 'listId', e.target.value)}
+                                onFocus={() => !meta.lists && fetchPlatformMeta('x', 'lists')}>
+                                <option value="">— None —</option>
+                                {(meta.lists ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Community (optional)</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.communityId ?? ''}
+                              onChange={e => setPlatformSetting('x', 'communityId', e.target.value)}
+                              onFocus={() => !meta.communities && fetchPlatformMeta('x', 'communities')}>
+                              <option value="">— None —</option>
+                              {(meta.communities ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* LinkedIn */}
+                      {ch.platform === 'linkedin' && (
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Post as Company Page (optional)</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.companyId ?? ''}
+                              onChange={e => setPlatformSetting('linkedin', 'companyId', e.target.value)}
+                              onFocus={() => !meta.companies && fetchPlatformMeta('linkedin', 'companies')}>
+                              <option value="">— Personal profile —</option>
+                              {(meta.companies ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] text-muted-foreground">Carousel post</p>
+                            <Switch
+                              checked={s.carousel === 'true'}
+                              onCheckedChange={v => setPlatformSetting('linkedin', 'carousel', String(v))}
+                              className="scale-75 origin-right"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reddit */}
+                      {ch.platform === 'reddit' && (
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Subreddit</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.subreddit ?? ''}
+                              onChange={e => {
+                                setPlatformSetting('reddit', 'subreddit', e.target.value)
+                                if (e.target.value) fetchPlatformMeta('reddit', 'flairs', e.target.value)
+                              }}
+                              onFocus={() => !meta.subreddits && fetchPlatformMeta('reddit', 'subreddits')}>
+                              <option value="">— Select subreddit —</option>
+                              {(meta.subreddits ?? []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                            </select>
+                          </div>
+                          {s.subreddit && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] text-muted-foreground">Flair (optional)</p>
+                              <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                                value={s.flairId ?? ''}
+                                onChange={e => setPlatformSetting('reddit', 'flairId', e.target.value)}>
+                                <option value="">— No flair —</option>
+                                {(meta.flairs ?? []).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                              </select>
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Post type</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.postKind ?? 'self'}
+                              onChange={e => setPlatformSetting('reddit', 'postKind', e.target.value)}>
+                              <option value="self">Text</option>
+                              <option value="link">Link</option>
+                              <option value="image">Image</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* YouTube */}
+                      {ch.platform === 'youtube' && (
+                        <div className="space-y-2">
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Playlist (optional)</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.playlistId ?? ''}
+                              onChange={e => setPlatformSetting('youtube', 'playlistId', e.target.value)}
+                              onFocus={() => !meta.playlists && fetchPlatformMeta('youtube', 'playlists')}>
+                              <option value="">— None —</option>
+                              {(meta.playlists ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Category</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.categoryId ?? '22'}
+                              onChange={e => setPlatformSetting('youtube', 'categoryId', e.target.value)}
+                              onFocus={() => !meta.categories && fetchPlatformMeta('youtube', 'categories')}>
+                              <option value="22">People &amp; Blogs</option>
+                              {(meta.categories ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-muted-foreground">Privacy</p>
+                            <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
+                              value={s.privacyStatus ?? 'public'}
+                              onChange={e => setPlatformSetting('youtube', 'privacyStatus', e.target.value)}>
+                              <option value="public">Public</option>
+                              <option value="unlisted">Unlisted</option>
+                              <option value="private">Private</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
+
           {/* Schedule */}
           <Card className="bg-card border-border shadow-sm">
             <div className="px-4 pt-4 pb-2">
@@ -767,6 +1005,32 @@ export default function ComposePage() {
                 onCheckedChange={setEnableSignature}
                 className="data-[state=checked]:bg-accent"
               />
+            </div>
+
+            {/* Recycle / Evergreen */}
+            <div className="px-4 py-3 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-foreground flex items-center gap-1.5"><RefreshCw className="w-3 h-3" /> Evergreen Recycle</p>
+                  <p className="text-[10px] text-muted-foreground">Re-post automatically after N days</p>
+                </div>
+                <Switch checked={recycleEnabled} onCheckedChange={setRecycleEnabled} />
+              </div>
+              {recycleEnabled && (
+                <div className="mt-2.5 flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground flex-shrink-0">Every</span>
+                  <Select value={String(recycleIntervalDays)} onValueChange={v => setRecycleIntervalDays(Number(v))}>
+                    <SelectTrigger className="h-7 text-xs bg-input border-border w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[7, 14, 30, 60, 90, 180].map(d => (
+                        <SelectItem key={d} value={String(d)}>{d} days</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="px-4 pb-4">

@@ -152,13 +152,14 @@ export default function ChannelsPage() {
                   const Icon = plat?.icon
                   const alreadyConnected = channels.some(c => c.platform === platform)
                   return (
-                    <button
+                    <a
                       key={platform}
-                      disabled={alreadyConnected}
+                      href={alreadyConnected ? undefined : `/api/oauth/${platform}`}
+                      aria-disabled={alreadyConnected}
                       className={cn(
                         'flex flex-col items-center gap-2 p-3 rounded-sm border text-center transition-all',
                         alreadyConnected
-                          ? 'border-emerald-500/20 bg-emerald-500/5 cursor-default'
+                          ? 'border-emerald-500/20 bg-emerald-500/5 cursor-default pointer-events-none'
                           : 'border-border hover:border-accent/40 hover:bg-accent/5 cursor-pointer'
                       )}
                     >
@@ -169,7 +170,7 @@ export default function ChannelsPage() {
                       ) : (
                         <Plus className="w-3 h-3 text-muted-foreground/40" />
                       )}
-                    </button>
+                    </a>
                   )
                 })}
               </div>

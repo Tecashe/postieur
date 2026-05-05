@@ -1,119 +1,138 @@
-'use client'
+﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Zap, Plus, Settings, CheckCircle2, XCircle, Globe, ArrowRight,
-  Clock, Tag, RefreshCw, Star,
-} from 'lucide-react'
-import { MOCK_PLUGS } from '@/lib/mock-data'
-import { PLATFORMS } from '@/lib/constants'
-import { cn } from '@/lib/utils'
-import type { Plug } from '@/lib/types'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Zap, Plus, Trash2, RefreshCw } from 'lucide-react'
 
-const GLOBAL_PLUGS = MOCK_PLUGS.filter(p => p.type === 'global')
-const MY_PLUGS = MOCK_PLUGS.filter(p => p.type === 'internal')
+interface AutoAction { id: string; name: string; trigger: string; action: string; isEnabled: boolean; metadata: Record<string,unknown>; executionCount: number; createdAt: string }
+
+const TRIGGERS = ['FOLLOWER_MILESTONE','POST_PUBLISHED','SCHEDULED_TIME','NEW_COMMENT']
+const ACTIONS = ['NOTIFY_WEBHOOK','CREATE_POST','SEND_EMAIL','AUTO_LIKE','AUTO_COMMENT']
+const TRIGGER_LABELS: Record<string,string> = { FOLLOWER_MILESTONE: 'Follower milestone', POST_PUBLISHED: 'Post published', SCHEDULED_TIME: 'Scheduled time', NEW_COMMENT: 'New comment' }
+const ACTION_LABELS: Record<string,string> = { NOTIFY_WEBHOOK: 'Notify webhook', CREATE_POST: 'Create post', SEND_EMAIL: 'Send email', AUTO_LIKE: 'Auto-like posts', AUTO_COMMENT: 'Auto-comment on posts' }
 
 export default function PlugsPage() {
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(
-    Object.fromEntries(MOCK_PLUGS.map(p => [p.id, p.enabled ?? p.isActive]))
-  )
+  const [items, setItems] = useState<AutoAction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showDialog, setShowDialog] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', isEnabled: true })
 
-  const toggle = (id: string) => setEnabled(prev => ({ ...prev, [id]: !prev[id] }))
+  const load = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch('/api/auto-actions').then(r => r.json())
+    setItems(r.actions ?? [])
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
 
-  const PlugCard = ({ plug }: { plug: Plug }) => (
-    <Card className={cn(
-      'bg-card border-border shadow-sm p-4 transition-all',
-      enabled[plug.id] ? 'border-accent/20' : 'opacity-70'
-    )}>
-      <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
-          <Zap className="w-4 h-4 text-muted-foreground" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <h3 className="text-xs font-medium text-foreground truncate">{plug.name}</h3>
-              {plug.type === 'global' && <Star className="w-3 h-3 text-amber-500 flex-shrink-0" />}
-            </div>
-            <Switch
-              checked={!!enabled[plug.id]}
-              onCheckedChange={() => toggle(plug.id)}
-              className="data-[state=checked]:bg-accent flex-shrink-0 scale-90"
-            />
-          </div>
-          <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">{plug.description}</p>
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-              {plug.runCount} runs
-            </div>
-            {plug.trigger && (
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {plug.trigger}
-              </div>
-            )}
-            <div className={cn('flex items-center gap-1', enabled[plug.id] ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
-              <div className={cn('w-1.5 h-1.5 rounded-full', enabled[plug.id] ? 'bg-emerald-500' : 'bg-muted-foreground/40')} />
-              {enabled[plug.id] ? 'Active' : 'Inactive'}
-            </div>
-          </div>
-        </div>
-      </div>
-    </Card>
-  )
+  const handleCreate = async () => {
+    if (!form.name) return
+    setSaving(true)
+    const metadata = form.action === 'NOTIFY_WEBHOOK' ? { webhookUrl: form.webhookUrl } : {}
+    await fetch('/api/auto-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, trigger: form.trigger, action: form.action, isEnabled: form.isEnabled, metadata }) })
+    setSaving(false); setShowDialog(false); await load()
+  }
+
+  const handleToggle = async (id: string, isEnabled: boolean) => {
+    await fetch('/api/auto-actions/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isEnabled }) })
+    setItems(prev => prev.map(a => a.id === id ? { ...a, isEnabled } : a))
+  }
+
+  const handleDelete = async (id: string) => {
+    await fetch('/api/auto-actions/' + id, { method: 'DELETE' })
+    setItems(prev => prev.filter(a => a.id !== id))
+  }
 
   return (
-    <div className="space-y-6 pb-6">
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="bg-card border-border shadow-sm p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">My Plugs</p>
-          <p className="text-2xl font-light text-foreground mt-1">{MY_PLUGS.length}</p>
-        </Card>
-        <Card className="bg-accent/5 border-accent/20 shadow-sm p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Active</p>
-          <p className="text-2xl font-light text-accent mt-1">{Object.values(enabled).filter(Boolean).length}</p>
-        </Card>
-        <Card className="bg-card border-border shadow-sm p-4">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Total Runs</p>
-          <p className="text-2xl font-light text-foreground mt-1">{MOCK_PLUGS.reduce((s, p) => s + (p.runCount ?? p.triggerCount ?? 0), 0).toLocaleString()}</p>
-        </Card>
+    <div className="space-y-5 pb-6">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">{items.length} automation{items.length !== 1 ? 's' : ''}</p>
+        <Button size="sm" className="gap-1.5 text-xs" onClick={() => { setForm({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', isEnabled: true }); setShowDialog(true) }}>
+          <Plus className="w-3.5 h-3.5" /> New Automation
+        </Button>
       </div>
 
-      {/* My Plugs */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-foreground">My Automation Plugs</h2>
-          <Button size="sm" className="gap-1.5 text-xs"><Plus className="w-3.5 h-3.5" /> New Plug</Button>
+      {loading ? (
+        <div className="space-y-2">{Array.from({length:2}).map((_,i)=><div key={i} className="h-16 rounded-lg bg-muted/40 animate-pulse"/>)}</div>
+      ) : items.length === 0 ? (
+        <Card className="p-12 text-center">
+          <Zap className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">No automations yet</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">Create automated actions triggered by events</p>
+          <Button size="sm" className="mt-4 gap-1.5 text-xs" onClick={() => setShowDialog(true)}><Plus className="w-3.5 h-3.5" />New Automation</Button>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {items.map(a => (
+            <Card key={a.id} className="p-3.5">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{a.name}</span>
+                    <Badge variant={a.isEnabled ? 'default' : 'secondary'} className="text-[10px] h-4 px-1.5">{a.isEnabled ? 'Active' : 'Paused'}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    When <span className="font-medium text-foreground">{TRIGGER_LABELS[a.trigger] ?? a.trigger}</span> → <span className="font-medium text-foreground">{ACTION_LABELS[a.action] ?? a.action}</span>
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Executed {a.executionCount} times</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Switch checked={a.isEnabled} onCheckedChange={v => handleToggle(a.id, v)} className="scale-75 origin-right" />
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(a.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
-        {MY_PLUGS.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {MY_PLUGS.map(p => <PlugCard key={p.id} plug={p} />)}
+      )}
+
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>New Automation</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name</Label>
+              <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="e.g. Notify on publish" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Trigger</Label>
+              <select className="w-full h-8 text-sm rounded-md border border-input bg-background px-2" value={form.trigger} onChange={e => setForm(f => ({...f, trigger: e.target.value}))}>
+                {TRIGGERS.map(t => <option key={t} value={t}>{TRIGGER_LABELS[t]}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Action</Label>
+              <select className="w-full h-8 text-sm rounded-md border border-input bg-background px-2" value={form.action} onChange={e => setForm(f => ({...f, action: e.target.value}))}>
+                {ACTIONS.map(a => <option key={a} value={a}>{ACTION_LABELS[a]}</option>)}
+              </select>
+            </div>
+            {form.action === 'NOTIFY_WEBHOOK' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Webhook URL</Label>
+                <Input className="h-8 text-sm" value={form.webhookUrl} onChange={e => setForm(f => ({...f, webhookUrl: e.target.value}))} placeholder="https://hooks.example.com/..." />
+              </div>
+            )}
+            {(form.action === 'AUTO_LIKE' || form.action === 'AUTO_COMMENT') && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-2">
+                Requires extended OAuth write scopes on each platform. Connect channels with write access in <strong>Channels</strong> settings first.
+              </p>
+            )}
           </div>
-        ) : (
-          <Card className="bg-card border-border border-dashed shadow-sm p-8 text-center">
-            <Zap className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground mb-3">No plugs yet. Create your first automation.</p>
-            <Button size="sm" className="gap-1.5 text-xs"><Plus className="w-3.5 h-3.5" /> Create Plug</Button>
-          </Card>
-        )}
-      </div>
-
-      {/* Global Plugs */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-medium text-foreground">Marketplace Plugs</h2>
-          <Badge className="bg-accent/10 text-accent border-0 text-[10px]">Community</Badge>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {GLOBAL_PLUGS.map(p => <PlugCard key={p.id} plug={p} />)}
-        </div>
-      </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={!form.name || saving}>
+              {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -34,13 +34,41 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json() as {
-    action: 'improve' | 'hashtags' | 'variants' | 'thread'
+    action: 'improve' | 'hashtags' | 'variants' | 'thread' | 'image'
     content: string
     platform?: string
     tone?: string
+    imagePrompt?: string
   }
 
-  const { action, content, platform = 'default', tone = 'professional' } = body
+  const { action, content, platform = 'default', tone = 'professional', imagePrompt } = body
+
+  // ── Image generation (DALL-E 3) ──────────────────────────────────────────
+  if (action === 'image') {
+    const prompt = imagePrompt?.trim() || content?.trim()
+    if (!prompt || prompt.length < 3) {
+      return NextResponse.json({ error: 'Prompt too short' }, { status: 400 })
+    }
+    const imgRes = await openai.images.generate({
+      model: 'dall-e-3',
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      quality: 'standard',
+    })
+    const url = imgRes.data[0]?.url
+    if (!url) return NextResponse.json({ error: 'No image returned' }, { status: 500 })
+
+    // Download and store in Vercel Blob so the URL is permanent
+    const { put } = await import('@vercel/blob')
+    const imgResponse = await fetch(url)
+    const blob = await imgResponse.blob()
+    const stored = await put(`ai-images/${Date.now()}.png`, blob, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    })
+    return NextResponse.json({ url: stored.url })
+  }
 
   if (!content || content.trim().length < 3) {
     return NextResponse.json({ error: 'Content too short' }, { status: 400 })

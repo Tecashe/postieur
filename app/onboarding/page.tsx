@@ -1,15 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useOrganizationList } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AlertTriangle } from 'lucide-react'
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // ?new=true means an existing user explicitly wants a new workspace (not first-time setup)
+  const isNewWorkspace = searchParams.get('new') === 'true'
+
   const { createOrganization, setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: true },
   })
@@ -17,13 +22,14 @@ export default function OnboardingPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Skip onboarding for users who already have an org (e.g. joined via invitation)
+  // Skip onboarding only for first-time setup (not when explicitly creating a new workspace)
   useEffect(() => {
+    if (isNewWorkspace) return
     if (userMemberships?.isLoading !== false) return
     if ((userMemberships?.data?.length ?? 0) > 0) {
       router.replace('/dashboard')
     }
-  }, [userMemberships?.isLoading, userMemberships?.data?.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isNewWorkspace, userMemberships?.isLoading, userMemberships?.data?.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -43,9 +49,16 @@ export default function OnboardingPage() {
         await setActive({ organization: org })
       }
       router.push('/dashboard')
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to create workspace:', err)
-      setError('Failed to create workspace. Please try again.')
+      // Surface Clerk quota error gracefully
+      const clerkErr = err as { errors?: { code: string; longMessage?: string }[] }
+      const quotaErr = clerkErr?.errors?.find((e) => e.code === 'organization_membership_quota_exceeded')
+      if (quotaErr) {
+        setError('You\'ve reached your limit of 5 workspace memberships. Leave an existing workspace before creating a new one.')
+      } else {
+        setError('Failed to create workspace. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -94,7 +107,10 @@ export default function OnboardingPage() {
               </div>
 
               {error && (
-                <p className="text-sm text-destructive">{error}</p>
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-sm bg-destructive/5 border border-destructive/20">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive">{error}</p>
+                </div>
               )}
 
               <Button

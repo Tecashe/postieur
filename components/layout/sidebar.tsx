@@ -49,9 +49,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { userMemberships, setActive } = useOrganizationList({
     userMemberships: { infinite: true },
   })
-  const { organization: activeOrg } = useOrganization()
+  const { organization: activeOrg, membership: activeMembership } = useOrganization()
 
   const collapsed = !isMobile && isCollapsed
+
+  // Only owners/admins can create new workspaces
+  const canCreateWorkspace = activeMembership?.role === 'org:owner' || activeMembership?.role === 'org:admin'
 
   const userInitials = user?.fullName
     ? user.fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -122,9 +125,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       )
                     })}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/onboarding')} className="text-muted-foreground">
-                      + New Workspace
-                    </DropdownMenuItem>
+                    {canCreateWorkspace && (
+                      <DropdownMenuItem onClick={() => router.push('/onboarding?new=true')} className="text-muted-foreground">
+                        + New Workspace
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

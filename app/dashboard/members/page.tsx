@@ -15,10 +15,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Progress } from '@/components/ui/progress'
 import {
-  UserPlus, Search, Shield, Edit3, Crown, Trash2, Mail, Clock, ChevronDown, Check,
+  UserPlus, Search, Shield, Edit3, Crown, Trash2, Mail, Clock, ChevronDown, Check, Users, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+const MAX_SEATS = 5
 
 type ClerkRole = 'org:owner' | 'org:admin' | 'org:member'
 
@@ -52,6 +55,12 @@ export default function MembersPage() {
 
   const members = memberships?.data ?? []
   const pendingInvites = invitations?.data ?? []
+
+  // Quota: Clerk counts active members + pending invitations toward the limit
+  const totalOccupied = members.length + pendingInvites.length
+  const remaining     = MAX_SEATS - totalOccupied
+  const atLimit       = remaining <= 0
+  const quotaPct      = Math.min(100, (totalOccupied / MAX_SEATS) * 100)
 
   // Determine the current user's role in this org
   const myMembership = members.find((m) => m.publicUserData?.userId === user?.id)
@@ -120,6 +129,32 @@ export default function MembersPage() {
     <div className="space-y-5 pb-6">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
+        {/* Seat capacity card */}
+        <Card className="col-span-3 bg-card border-border shadow-sm p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-muted-foreground" />
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">Workspace Capacity</p>
+            </div>
+            <p className={cn('text-xs font-medium tabular-nums', atLimit ? 'text-amber-600 dark:text-amber-400' : 'text-foreground')}>
+              {totalOccupied} / {MAX_SEATS} seats used
+              {remaining > 0 && <span className="text-muted-foreground font-normal"> &nbsp;·&nbsp; {remaining} remaining</span>}
+            </p>
+          </div>
+          <Progress
+            value={quotaPct}
+            className={cn('h-1.5', atLimit ? '[&>div]:bg-amber-500' : '[&>div]:bg-primary')}
+          />
+          {atLimit && (
+            <div className="flex items-start gap-2 mt-2.5 px-3 py-2 rounded-sm bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                You've reached your 5-seat limit. Revoke a pending invitation or remove a member to free up a slot.
+              </p>
+            </div>
+          )}
+        </Card>
+
         {Object.entries(ROLE_CONFIG).map(([role, cfg]) => {
           const Icon = cfg.icon
           return (
@@ -281,33 +316,51 @@ export default function MembersPage() {
           {/* Invite form — only for admins/owners */}
           {canManageRoles && (
             <Card className="bg-card border-border shadow-sm p-5">
-              <h3 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-medium text-foreground mb-1 flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-muted-foreground" />Invite Team Member
               </h3>
-              <form onSubmit={handleInvite} className="space-y-3">
-                <div>
-                  <Label className="text-xs">Email Address</Label>
-                  <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com" type="email" className="mt-1 h-8 text-xs bg-input border-border" required />
-                </div>
-                <div>
-                  <Label className="text-xs">Role</Label>
-                  <div className="grid grid-cols-2 gap-1.5 mt-1">
-                    {INVITE_ROLES.map(({ value, label, Icon, desc }) => (
-                      <button key={value} type="button" onClick={() => setInviteRole(value)}
-                        className={cn('flex flex-col gap-0.5 px-3 py-2 rounded-sm border text-xs transition-all text-left',
-                          inviteRole === value ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
-                        <span className="flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" />{label}</span>
-                        <span className="text-[10px] opacity-70">{desc}</span>
-                      </button>
-                    ))}
+              <p className="text-[11px] text-muted-foreground mb-4">
+                {atLimit
+                  ? <span className="text-amber-600 dark:text-amber-400 font-medium">Seat limit reached (5/5)</span>
+                  : <>{remaining} seat{remaining !== 1 ? 's' : ''} available</>}
+              </p>
+
+              {atLimit ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
+                  <div className="w-10 h-10 rounded-sm bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">No seats available</p>
+                    <p className="text-xs text-muted-foreground mt-1">Remove a member or revoke a pending invitation to invite someone new.</p>
                   </div>
                 </div>
-                {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
-                {inviteSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">Invitation sent!</p>}
-                <Button type="submit" className="w-full text-xs gap-1.5" disabled={!inviteEmail || inviting}>
-                  <Mail className="w-3.5 h-3.5" />{inviting ? 'Sending…' : 'Send Invitation'}
-                </Button>
-              </form>
+              ) : (
+                <form onSubmit={handleInvite} className="space-y-3">
+                  <div>
+                    <Label className="text-xs">Email Address</Label>
+                    <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@company.com" type="email" className="mt-1 h-8 text-xs bg-input border-border" required />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Role</Label>
+                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                      {INVITE_ROLES.map(({ value, label, Icon, desc }) => (
+                        <button key={value} type="button" onClick={() => setInviteRole(value)}
+                          className={cn('flex flex-col gap-0.5 px-3 py-2 rounded-sm border text-xs transition-all text-left',
+                            inviteRole === value ? 'border-accent/40 bg-accent/5 text-accent' : 'border-border text-muted-foreground hover:text-foreground')}>
+                          <span className="flex items-center gap-1.5"><Icon className="w-3.5 h-3.5" />{label}</span>
+                          <span className="text-[10px] opacity-70">{desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
+                  {inviteSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400">Invitation sent!</p>}
+                  <Button type="submit" className="w-full text-xs gap-1.5" disabled={!inviteEmail || inviting}>
+                    <Mail className="w-3.5 h-3.5" />{inviting ? 'Sending…' : 'Send Invitation'}
+                  </Button>
+                </form>
+              )}
             </Card>
           )}
 

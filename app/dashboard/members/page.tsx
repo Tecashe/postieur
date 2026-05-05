@@ -17,25 +17,27 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
 import {
-  UserPlus, Search, Shield, Edit3, Crown, Trash2, Mail, Clock, ChevronDown, Check, Users, AlertTriangle,
+  UserPlus, Search, Shield, Edit3, Crown, Trash2, Mail, Clock, ChevronDown, Check, Users, AlertTriangle, Pencil,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const MAX_SEATS = 5
 
-type ClerkRole = 'org:owner' | 'org:admin' | 'org:member'
+type ClerkRole = 'org:owner' | 'org:admin' | 'org:member' | 'org:content_editor'
 
 const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  'org:owner':  { label: 'Owner',  icon: Crown,  color: 'text-primary bg-primary/10' },
-  'org:admin':  { label: 'Admin',  icon: Shield, color: 'text-accent bg-accent/10' },
-  'org:member': { label: 'Member', icon: Edit3,  color: 'text-foreground bg-muted' },
+  'org:owner':          { label: 'Owner',          icon: Crown,   color: 'text-primary bg-primary/10' },
+  'org:admin':          { label: 'Admin',          icon: Shield,  color: 'text-accent bg-accent/10' },
+  'org:content_editor': { label: 'Content Editor', icon: Pencil,  color: 'text-sky-600 bg-sky-50 dark:text-sky-400 dark:bg-sky-950/30' },
+  'org:member':         { label: 'Member',         icon: Edit3,   color: 'text-foreground bg-muted' },
 }
 
-const ASSIGNABLE_ROLES: ClerkRole[] = ['org:admin', 'org:member']
+const ASSIGNABLE_ROLES: ClerkRole[] = ['org:admin', 'org:content_editor', 'org:member']
 
 const INVITE_ROLES: { value: ClerkRole; label: string; Icon: React.ElementType; desc: string }[] = [
-  { value: 'org:admin',  label: 'Admin',  Icon: Shield, desc: 'Manage members & content' },
-  { value: 'org:member', label: 'Member', Icon: Edit3,  desc: 'Create & schedule posts' },
+  { value: 'org:admin',          label: 'Admin',          Icon: Shield, desc: 'Manage members & content' },
+  { value: 'org:content_editor', label: 'Content Editor', Icon: Pencil, desc: 'Create & edit posts only' },
+  { value: 'org:member',         label: 'Member',         Icon: Edit3,  desc: 'Create & schedule posts' },
 ]
 
 export default function MembersPage() {
@@ -78,9 +80,10 @@ export default function MembersPage() {
   })
 
   const roleCounts: Record<string, number> = {
-    'org:owner':  members.filter((m) => m.role === 'org:owner').length,
-    'org:admin':  members.filter((m) => m.role === 'org:admin').length,
-    'org:member': members.filter((m) => m.role === 'org:member').length,
+    'org:owner':          members.filter((m) => m.role === 'org:owner').length,
+    'org:admin':          members.filter((m) => m.role === 'org:admin').length,
+    'org:content_editor': members.filter((m) => m.role === 'org:content_editor').length,
+    'org:member':         members.filter((m) => m.role === 'org:member').length,
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -128,7 +131,7 @@ export default function MembersPage() {
   return (
     <div className="space-y-5 pb-6">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Seat capacity card */}
         <Card className="col-span-3 bg-card border-border shadow-sm p-4">
           <div className="flex items-center justify-between mb-2">
@@ -166,8 +169,7 @@ export default function MembersPage() {
               <p className="text-2xl font-light text-foreground">{roleCounts[role] ?? 0}</p>
             </Card>
           )
-        })}
-      </div>
+        })}      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
         <div className="space-y-4">
@@ -343,7 +345,7 @@ export default function MembersPage() {
                   </div>
                   <div>
                     <Label className="text-xs">Role</Label>
-                    <div className="grid grid-cols-2 gap-1.5 mt-1">
+                    <div className="flex flex-col gap-1.5 mt-1">
                       {INVITE_ROLES.map(({ value, label, Icon, desc }) => (
                         <button key={value} type="button" onClick={() => setInviteRole(value)}
                           className={cn('flex flex-col gap-0.5 px-3 py-2 rounded-sm border text-xs transition-all text-left',
@@ -369,9 +371,10 @@ export default function MembersPage() {
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3">Role Permissions</h3>
             <div className="space-y-0">
               {([
-                ['org:owner',  'Owner',  'Full control, billing, delete workspace'],
-                ['org:admin',  'Admin',  'Manage members, all content access'],
-                ['org:member', 'Member', 'Create & schedule posts'],
+                ['org:owner',          'Owner',          'Full control, billing, delete workspace'],
+                ['org:admin',          'Admin',          'Manage members, all content access'],
+                ['org:content_editor', 'Content Editor', 'Create & edit posts, cannot manage members'],
+                ['org:member',         'Member',         'Create & schedule posts'],
               ] as [string, string, string][]).map(([roleKey, label, desc]) => {
                 const cfg = ROLE_CONFIG[roleKey]
                 const Icon = cfg.icon

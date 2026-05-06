@@ -135,6 +135,34 @@ function ComposeInner() {
         })
         .catch(() => {})
     }
+
+    // Handle image coming from Design Studio ("Use in Post")
+    const fromDesign = searchParams.get('from') === 'design'
+    if (fromDesign) {
+      const dataURL = sessionStorage.getItem('design-export')
+      if (dataURL) {
+        sessionStorage.removeItem('design-export')
+        // Try to upload to media library first; fall back to inline data URL
+        ;(async () => {
+          try {
+            const res = await fetch(dataURL)
+            const blob = await res.blob()
+            const file = new File([blob], 'design.png', { type: 'image/png' })
+            const form = new FormData()
+            form.append('file', file)
+            const uploadRes = await fetch('/api/media', { method: 'POST', body: form })
+            if (uploadRes.ok) {
+              const data = await uploadRes.json() as { items?: Array<{ url: string }> }
+              const url = data.items?.[0]?.url
+              if (url) { setMediaFiles(prev => [...prev, url]); toast.success('Design added to post'); return }
+            }
+          } catch { /* fall through */ }
+          // Blob upload unavailable — use data URL directly
+          setMediaFiles(prev => [...prev, dataURL])
+          toast.success('Design added to post')
+        })()
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -652,7 +680,13 @@ function ComposeInner() {
                 <div className="px-3 pb-3 flex gap-2 flex-wrap border-t border-border pt-3">
                   {mediaFiles.map((f, i) => (
                     <div key={i} className="relative group w-16 h-16 rounded-sm border border-border bg-muted flex items-center justify-center overflow-hidden">
-                      <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {(f.startsWith('http') || f.startsWith('data:')) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={f} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                      )}
                       <button
                         onClick={() => setMediaFiles(prev => prev.filter((_, idx) => idx !== i))}
                         className="absolute inset-0 bg-background/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"

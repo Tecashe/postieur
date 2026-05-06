@@ -21,7 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
-import { MOCK_POSTS } from '@/lib/mock-data'
+
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { Post } from '@/lib/types'
@@ -318,7 +318,7 @@ export default function CalendarClient({ initialPosts }: { initialPosts?: Post[]
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [selectedPost, setSelectedPost] = useState<Post | null>(null)
-  const [posts, setPosts] = useState<Post[]>(initialPosts ?? MOCK_POSTS)
+  const [posts, setPosts] = useState<Post[]>(initialPosts ?? [])
   const [draggingPost, setDraggingPost] = useState<Post | null>(null)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))

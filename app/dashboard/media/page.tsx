@@ -146,12 +146,17 @@ export default function MediaPage() {
         form.append('file', file)
         if (folder) form.append('folder', folder)
         const res = await fetch('/api/media', { method: 'POST', body: form })
-        if (!res.ok) throw new Error(await res.text())
+        if (!res.ok) {
+          const data = await res.json() as { error?: string }
+          throw new Error(data.error ?? `Upload failed (${res.status})`)
+        }
         const data = await res.json() as { items: DbMediaItem[] }
         if (data.items?.[0]) newItems.push(data.items[0])
         setUploads(prev => prev.map((u, i) => i === idx ? { ...u, progress: 'done' } : u))
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Upload failed'
         setUploads(prev => prev.map((u, i) => i === idx ? { ...u, progress: 'error' } : u))
+        toast.error(msg)
       }
     }))
 

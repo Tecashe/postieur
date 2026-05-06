@@ -13,6 +13,7 @@ import { publishToDiscord } from './discord'
 import { publishToBluesky } from './bluesky'
 import { publishToTelegram } from './telegram'
 import { publishToThreads } from './threads'
+import { publishToTikTok } from './tiktok'
 
 export type { PublisherPost, PublisherChannel, PostChannelConfig, PublishResult }
 
@@ -52,6 +53,9 @@ export async function publish(
 
     case 'threads':
       return publishToThreads(post, channel, channelConfig)
+
+    case 'tiktok':
+      return publishToTikTok(post, channel, channelConfig)
 
     default:
       return {

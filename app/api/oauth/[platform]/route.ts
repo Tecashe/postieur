@@ -56,6 +56,24 @@ const PLATFORM_CONFIG: Record<string, {
     clientId: process.env.THREADS_APP_ID ?? '',
     scopes: 'threads_basic,threads_content_publish',
   },
+  tiktok: {
+    authUrl: 'https://www.tiktok.com/v2/auth/authorize',
+    clientId: process.env.TIKTOK_CLIENT_KEY ?? '',
+    scopes: 'user.info.basic,video.publish,video.upload',
+    usePKCE: true,
+    extraParams: { response_type: 'code' },
+  },
+  pinterest: {
+    authUrl: 'https://www.pinterest.com/oauth',
+    clientId: process.env.PINTEREST_APP_ID ?? '',
+    scopes: 'boards:read,pins:read,pins:write',
+  },
+  mastodon: {
+    // Mastodon uses instance-specific OAuth — handled separately via /api/channels/connect/mastodon
+    authUrl: '',
+    clientId: '',
+    scopes: 'write:statuses write:media read:accounts',
+  },
 }
 
 export async function GET(

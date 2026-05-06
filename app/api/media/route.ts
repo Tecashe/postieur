@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
   const files = formData.getAll('file') as File[]
   if (files.length === 0) return NextResponse.json({ error: 'No files provided' }, { status: 400 })
 
+  // Check Vercel Blob token is configured
+  if (!process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN.includes('replace_with')) {
+    return NextResponse.json(
+      { error: 'Storage is not configured. Add a valid BLOB_READ_WRITE_TOKEN in your environment variables (Vercel → Storage → Blob).' },
+      { status: 503 }
+    )
+  }
+
   const results: Array<{ url: string; id: string; filename: string; sizeBytes: number; type: string; mimeType: string; folder: string | null; createdAt: string }> = []
 
   for (const file of files) {
@@ -51,7 +59,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `File too large: ${file.name}` }, { status: 400 })
     }
 
-    const blob = await put(`media/${workspace.id}/${Date.now()}-${file.name}`, file, { access: 'public' })
+    let blob: { url: string }
+    try {
+      blob = await put(`media/${workspace.id}/${Date.now()}-${file.name}`, file, { access: 'public' })
+    } catch (err) {
+      console.error('[media upload] Vercel Blob error:', err)
+      const msg = err instanceof Error ? err.message : 'Storage upload failed'
+      return NextResponse.json({ error: msg }, { status: 502 })
+    }
 
     const mediaType = file.type.startsWith('video/') ? 'VIDEO' as const
       : file.type === 'image/gif' ? 'GIF' as const

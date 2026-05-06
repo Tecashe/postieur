@@ -337,14 +337,17 @@ function ComposeInner() {
     setIsSaving(true)
     try {
       let scheduledAt: string | null = null
-      if (mode === 'schedule' && scheduleDate && scheduleTime) {
+      if (mode === 'now') {
+        // Publish immediately — set scheduledAt to now so cron picks it up in the next tick
+        scheduledAt = new Date().toISOString()
+      } else if (mode === 'schedule' && scheduleDate && scheduleTime) {
         scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
       }
 
       const result = await createPost({
         content: finalContent,
         type: postType.toUpperCase() as 'POST' | 'THREAD' | 'CAROUSEL',
-        status: mode === 'now' ? 'DRAFT' : 'SCHEDULED',
+        status: mode === 'queue' ? 'SCHEDULED' : 'SCHEDULED',
         scheduledAt,
         mediaUrls: mediaFiles,
         threadPosts: postType === 'thread' ? threadPosts : [],
@@ -361,7 +364,7 @@ function ComposeInner() {
 
       if (result.success) {
         toast.success(
-          mode === 'now' ? 'Post saved � publishing shortly'
+          mode === 'now' ? 'Publishing now...'
           : mode === 'queue' ? 'Added to queue'
           : 'Post scheduled'
         )

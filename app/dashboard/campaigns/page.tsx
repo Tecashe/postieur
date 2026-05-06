@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Plus, Target, Edit3, Trash2, RefreshCw, CalendarDays, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface Campaign { id: string; name: string; description: string | null; status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED'; startDate: string | null; endDate: string | null; platforms: string[]; color: string | null; postCount: number; createdAt: string }
 
@@ -45,20 +46,41 @@ export default function CampaignsPage() {
   }
 
   const handleSave = async () => {
-    if (!form.name) return
+    if (!form.name.trim()) return
     setSaving(true)
-    const payload = { ...form, startDate: form.startDate || null, endDate: form.endDate || null, description: form.description || null }
-    if (editingId) {
-      await fetch(`/api/campaigns/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    } else {
-      await fetch('/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    try {
+      const payload = { ...form, startDate: form.startDate || null, endDate: form.endDate || null, description: form.description || null }
+      const url = editingId ? `/api/campaigns/${editingId}` : '/api/campaigns'
+      const method = editingId ? 'PUT' : 'POST'
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!res.ok) {
+        const data = await res.json() as { error?: string }
+        toast.error(data.error ?? 'Failed to save campaign')
+        return
+      }
+      toast.success(editingId ? 'Campaign updated' : 'Campaign created')
+      setShowDialog(false)
+      await load()
+    } catch {
+      toast.error('Network error — please try again')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false); setShowDialog(false); await load()
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/campaigns/${id}`, { method: 'DELETE' })
-    setCampaigns(prev => prev.filter(c => c.id !== id))
+    setCampaigns(prev => prev.filter(c => c.id !== id)) // optimistic
+    try {
+      const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json() as { error?: string }
+        toast.error(data.error ?? 'Failed to delete campaign')
+        await load() // rollback
+      }
+    } catch {
+      toast.error('Network error')
+      await load()
+    }
   }
 
   return (

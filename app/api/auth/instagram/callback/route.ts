@@ -45,7 +45,16 @@ export async function GET(request: Request) {
 
   const appId = process.env.META_APP_ID ?? ''
   const appSecret = process.env.META_APP_SECRET ?? ''
-  const redirectUri = `${APP_URL}/api/auth/instagram/callback`
+  // Strip trailing slash defensively — must be byte-for-byte identical in step 1 and step 2
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  const redirectUri = `${baseUrl}/api/auth/instagram/callback`
+
+  console.log('[instagram/callback] token exchange params:', {
+    appId: appId ? `${appId.slice(0, 4)}…(${appId.length} chars)` : 'MISSING',
+    appSecret: appSecret ? `set (${appSecret.length} chars)` : 'MISSING',
+    redirectUri,
+    codeLength: code.length,
+  })
 
   // ── Step 1: exchange code for short-lived token ─────────────────────────
   const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {

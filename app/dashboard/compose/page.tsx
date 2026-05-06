@@ -544,9 +544,11 @@ function ComposeInner() {
             </button>
           </div>
 
-          {/* Platform Tabs */}
-          {selectedPlatforms.length > 0 && (
-            <Card className="bg-card border-border p-0 overflow-hidden shadow-sm">
+          {/* Compose Card — always visible */}
+          <Card className="bg-card border-border p-0 overflow-hidden shadow-sm">
+
+            {/* Platform Tabs — only when channels are selected */}
+            {selectedPlatforms.length > 0 && (
               <div className="flex items-center gap-0 border-b border-border overflow-x-auto">
                 {connectedChannels.filter(c => selectedChannels.includes(c.id)).map((ch, i) => {
                   const plat = PLATFORMS[ch.platform]
@@ -569,6 +571,14 @@ function ComposeInner() {
                   Strictest limit: {strictestLimit.toLocaleString()} chars
                 </div>
               </div>
+            )}
+
+            {/* No-channels hint */}
+            {selectedPlatforms.length === 0 && (
+              <div className="px-4 py-2 border-b border-border bg-muted/20 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Select channels on the right to enable platform-specific features</span>
+              </div>
+            )}
 
               {/* Editor */}
               {postType === 'thread' ? (
@@ -715,13 +725,6 @@ function ComposeInner() {
                 </div>
               )}
             </Card>
-          )}
-
-          {selectedPlatforms.length === 0 && (
-            <Card className="bg-card border-border border-dashed p-8 text-center shadow-sm">
-              <p className="text-muted-foreground text-sm">Select channels on the right to start composing</p>
-            </Card>
-          )}
 
           {/* -- Live Preview -- */}
           {selectedPlatforms.length > 0 && showPreview && (

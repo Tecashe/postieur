@@ -77,6 +77,8 @@ model Workspace {
   notifPrefs      NotificationPreference[]
   notifications   Notification[]
   auditLogs       AuditLog[]
+  channelSets     ChannelSet[]
+  shortLinks      ShortLink[]
 
   @@map("workspaces")
 }
@@ -132,12 +134,19 @@ model Post {
   approvedById          String?
   approvedAt            DateTime?
   approvalNote          String?
+  // First comment
+  firstComment          String?
+  firstCommentDelayMins Int        @default(0)
+  // Per-platform content overrides + channel set link
+  platformContents      Json       @default("{}")
+  channelSetId          String?
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
-  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  channels   PostChannel[]
-  analytics  PostAnalytics?
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  channels        PostChannel[]
+  analytics       PostAnalytics?
+  pendingComments PendingComment[]
 
   @@index([workspaceId, status])
   @@index([workspaceId, scheduledAt])
@@ -196,6 +205,7 @@ model MediaItem {
   height       Int?
   duration     Float?
   altText      String?
+  folder       String?   // null = root / "All"
   uploadedById String?
   createdAt    DateTime  @default(now())
 
@@ -324,6 +334,7 @@ enum AutoActionTrigger {
   SCHEDULED_TIME
   RSS_ITEM_CREATED
   NEW_COMMENT
+  ENGAGEMENT_MILESTONE
 }
 
 enum AutoActionType {
@@ -332,6 +343,7 @@ enum AutoActionType {
   SEND_EMAIL
   AUTO_LIKE
   AUTO_COMMENT
+  AUTO_REPOST
 }
 
 model AutoAction {
@@ -471,6 +483,9 @@ model InboxMessage {
   isRead      Boolean          @default(false)
   isArchived  Boolean          @default(false)
   externalId  String?
+  // Reply tracking
+  replyText   String?
+  repliedAt   DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -572,4 +587,59 @@ model AuditLog {
 
   @@index([workspaceId, createdAt])
   @@map("audit_logs")
+}
+// --- ChannelSet ---
+
+model ChannelSet {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  description      String?
+  channelIds       String[] @default([])
+  platformSettings Json     @default("{}")
+  color            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("channel_sets")
+}
+
+// --- ShortLink ---
+
+model ShortLink {
+  id          String   @id @default(cuid())
+  workspaceId String
+  slug        String   @unique
+  originalUrl String
+  postId      String?
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("short_links")
+}
+
+// --- PendingComment ---
+
+model PendingComment {
+  id             String   @id @default(cuid())
+  postId         String
+  channelId      String
+  platform       String
+  content        String
+  platformPostId String
+  fireAt         DateTime
+  status         String   @default("PENDING") // PENDING | DONE | FAILED
+  failReason     String?
+  createdAt      DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([status, fireAt])
+  @@map("pending_comments")
 }

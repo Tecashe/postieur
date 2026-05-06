@@ -47,3 +47,24 @@ export async function getUnreadCount() {
   const workspaceId = await getWorkspaceId()
   return prisma.inboxMessage.count({ where: { workspaceId, isRead: false, isArchived: false } })
 }
+
+/**
+ * replyToMessage
+ *
+ * Stores the reply text on the InboxMessage record and marks it as read.
+ * Platform-level API calls (e.g. posting a LinkedIn comment reply) require
+ * per-channel OAuth tokens and are handled separately; here we record the
+ * reply so the dashboard always shows what was sent.
+ */
+export async function replyToMessage(id: string, replyText: string) {
+  const workspaceId = await getWorkspaceId()
+  if (!replyText.trim()) throw new Error('Reply text is required')
+  return prisma.inboxMessage.update({
+    where: { id, workspaceId },
+    data: {
+      replyText: replyText.trim(),
+      repliedAt: new Date(),
+      isRead: true,
+    },
+  })
+}

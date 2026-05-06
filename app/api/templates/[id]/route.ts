@@ -1,6 +1,15 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteTemplate, updateTemplate, useTemplate } from '@/lib/actions/templates'
+import { deleteTemplate, getTemplate, updateTemplate, useTemplate } from '@/lib/actions/templates'
+
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { orgId } = await auth()
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { id } = await params
+  const template = await getTemplate(id)
+  if (!template) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(template)
+}
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { orgId } = await auth()

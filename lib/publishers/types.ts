@@ -7,6 +7,9 @@ export interface PublisherPost {
   mediaUrls: string[]
   /** All thread posts (index 0 == post.content). Only set when type === 'THREAD'. */
   threadPosts: string[]
+  /** Per-platform content overrides (keyed by lowercase platform name). When set, the matching
+   *  value is used as the post content for that specific platform instead of the base `content`. */
+  platformContents?: Record<string, string>
 }
 
 export interface PublisherChannel {

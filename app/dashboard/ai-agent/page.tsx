@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Bot, Send, RefreshCw, Sparkles, User, Trash2, Copy, Check } from 'lucide-react'
+import { Bot, Send, RefreshCw, Sparkles, User, Trash2, Copy, Check, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
   id: string
+  streaming?: boolean
+  toolsUsed?: string[]
 }
 
 const SUGGESTIONS = [
@@ -48,15 +50,27 @@ function MessageBubble({ msg }: { msg: Message }) {
         {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
       </div>
       <div className={cn('max-w-[75%] space-y-1', isUser && 'items-end flex flex-col')}>
+        {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1">
+            {msg.toolsUsed.map(t => (
+              <span key={t} className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
+                <Wrench className="w-2.5 h-2.5" /> {t}
+              </span>
+            ))}
+          </div>
+        )}
         <div className={cn(
           'px-3.5 py-2.5 rounded-xl text-sm leading-relaxed',
           isUser
             ? 'bg-primary text-primary-foreground rounded-tr-sm'
             : 'bg-muted/60 text-foreground rounded-tl-sm border border-border'
         )}>
-          <p className="whitespace-pre-wrap">{msg.content}</p>
+          <p className="whitespace-pre-wrap">
+            {msg.content}
+            {msg.streaming && <span className="inline-block w-1.5 h-4 bg-accent ml-0.5 animate-pulse rounded-sm" />}
+          </p>
         </div>
-        {!isUser && <CopyButton text={msg.content} />}
+        {!isUser && !msg.streaming && <CopyButton text={msg.content} />}
       </div>
     </div>
   )
@@ -73,7 +87,7 @@ export default function AIAgentPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = async (text?: string) => {
+  const sendMessage = useCallback(async (text?: string) => {
     const userText = (text ?? input).trim()
     if (!userText || loading) return
 
@@ -83,6 +97,10 @@ export default function AIAgentPage() {
     setInput('')
     setLoading(true)
 
+    // Add a streaming placeholder for the assistant reply
+    const assistantId = crypto.randomUUID()
+    setMessages(prev => [...prev, { role: 'assistant', content: '', id: assistantId, streaming: true }])
+
     try {
       const res = await fetch('/api/ai/agent', {
         method: 'POST',
@@ -91,24 +109,66 @@ export default function AIAgentPage() {
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       })
-      const data = await res.json() as { reply?: string; error?: string }
-      if (data.error) throw new Error(data.error)
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.reply ?? '(No response)',
-        id: crypto.randomUUID(),
-      }])
+
+      if (!res.ok || !res.body) throw new Error('Request failed')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      const toolsUsed: string[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+          try {
+            const event = JSON.parse(raw) as { type: string; content?: string; message?: string; name?: string; tools?: string[] }
+
+            if (event.type === 'token' && event.content) {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: m.content + event.content! } : m
+              ))
+            } else if (event.type === 'tool_start' && event.tools) {
+              event.tools.forEach(t => { if (!toolsUsed.includes(t)) toolsUsed.push(t) })
+            } else if (event.type === 'done') {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId
+                  ? { ...m, content: event.content ?? m.content, streaming: false, toolsUsed }
+                  : m
+              ))
+            } else if (event.type === 'error') {
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId
+                  ? { ...m, content: `Error: ${event.message ?? 'Unknown error'}`, streaming: false }
+                  : m
+              ))
+            }
+          } catch {}
+        }
+      }
+
+      // Ensure streaming cursor is removed
+      setMessages(prev => prev.map(m =>
+        m.id === assistantId ? { ...m, streaming: false, toolsUsed } : m
+      ))
     } catch (err) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `Sorry, something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        id: crypto.randomUUID(),
-      }])
+      setMessages(prev => prev.map(m =>
+        m.id === assistantId
+          ? { ...m, content: `Sorry, something went wrong: ${err instanceof Error ? err.message : 'Unknown error'}`, streaming: false }
+          : m
+      ))
     } finally {
       setLoading(false)
       textareaRef.current?.focus()
     }
-  }
+  }, [input, loading, messages])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -165,7 +225,7 @@ export default function AIAgentPage() {
         ) : (
           <>
             {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-            {loading && (
+            {loading && messages[messages.length - 1]?.role !== 'assistant' && (
               <div className="flex gap-3">
                 <div className="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center flex-shrink-0">
                   <Bot className="w-3.5 h-3.5 text-accent" />

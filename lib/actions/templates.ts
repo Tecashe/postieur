@@ -19,6 +19,11 @@ export async function getTemplates() {
   })
 }
 
+export async function getTemplate(id: string) {
+  const workspaceId = await getWorkspaceId()
+  return prisma.template.findUnique({ where: { id, workspaceId } })
+}
+
 export async function createTemplate(data: {
   name: string
   content: string

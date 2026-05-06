@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { archiveMessage, getMessages, markAllRead, markRead } from '@/lib/actions/inbox'
+import { archiveMessage, getMessages, markAllRead, markRead, replyToMessage } from '@/lib/actions/inbox'
 
 export async function GET(req: NextRequest) {
   const { orgId } = await auth()
@@ -16,9 +16,14 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const { orgId } = await auth()
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { action, id } = await req.json()
+  const body = await req.json() as { action: string; id?: string; replyText?: string }
+  const { action, id } = body
   if (action === 'mark-read' && id) { await markRead(id); return NextResponse.json({ success: true }) }
   if (action === 'mark-all-read') { await markAllRead(); return NextResponse.json({ success: true }) }
   if (action === 'archive' && id) { await archiveMessage(id); return NextResponse.json({ success: true }) }
+  if (action === 'reply' && id && body.replyText) {
+    const updated = await replyToMessage(id, body.replyText)
+    return NextResponse.json({ success: true, repliedAt: updated.repliedAt })
+  }
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }

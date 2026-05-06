@@ -89,6 +89,54 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── ENGAGEMENT_MILESTONE ─────────────────────────────────────────────────────
+  // Fires when any published post in the workspace crosses a configured metric threshold.
+  // config.metric: 'likes' | 'comments' | 'shares' | 'impressions' | 'total'
+  // config.threshold: number
+  // config.firedPostIds: string[] — post IDs already triggered (de-dup guard)
+  const engagementActions = await prisma.autoAction.findMany({
+    where: { isEnabled: true, triggerType: 'ENGAGEMENT_MILESTONE' },
+  })
+  for (const action of engagementActions) {
+    const cfg = (action.config ?? {}) as Record<string, unknown>
+    const metric = String(cfg.metric ?? 'likes')
+    const threshold = Number(cfg.threshold ?? 100)
+    if (!threshold) continue
+
+    const firedPostIds: string[] = Array.isArray(cfg.firedPostIds) ? (cfg.firedPostIds as string[]) : []
+
+    const analytics = await prisma.postAnalytics.findMany({
+      where: {
+        post: { workspaceId: action.workspaceId, status: 'PUBLISHED' },
+        ...(firedPostIds.length > 0 ? { NOT: { postId: { in: firedPostIds } } } : {}),
+      },
+      select: { postId: true, likes: true, comments: true, shares: true, impressions: true },
+    })
+
+    const newFired: string[] = []
+    for (const pa of analytics) {
+      const value =
+        metric === 'total' ? pa.likes + pa.comments + pa.shares + pa.impressions
+        : metric === 'likes' ? pa.likes
+        : metric === 'comments' ? pa.comments
+        : metric === 'shares' ? pa.shares
+        : metric === 'impressions' ? pa.impressions
+        : 0
+      if (value >= threshold) {
+        await executeAction(action, { postId: pa.postId, metric, value, threshold })
+        newFired.push(pa.postId)
+        executed++
+      }
+    }
+
+    if (newFired.length > 0) {
+      await prisma.autoAction.update({
+        where: { id: action.id },
+        data: { config: { ...cfg, firedPostIds: [...firedPostIds, ...newFired] } as never },
+      })
+    }
+  }
+
   return NextResponse.json({ executed })
 }
 
@@ -127,6 +175,41 @@ async function executeAction(action: { id: string; workspaceId: string; actionTy
       `[auto-actions] ${action.actionType} stub — platform integration pending`,
       { actionId: action.id, workspaceId: action.workspaceId }
     )
+  }
+
+  if (action.actionType === 'AUTO_REPOST') {
+    const postId = context?.postId as string | undefined
+    if (postId) {
+      const delayHours = Number(config.delayHours ?? 24)
+      const original = await prisma.post.findUnique({
+        where: { id: postId },
+        include: { channels: { select: { channelId: true } } },
+      })
+      if (original) {
+        const scheduledAt = new Date(Date.now() + delayHours * 3_600_000)
+        await prisma.post.create({
+          data: {
+            workspaceId: original.workspaceId,
+            content: original.content,
+            type: original.type,
+            status: 'SCHEDULED',
+            scheduledAt,
+            mediaUrls: original.mediaUrls,
+            threadPosts: original.threadPosts,
+            labels: original.labels,
+            crossPostDelayMinutes: original.crossPostDelayMinutes,
+            createdById: original.createdById,
+            channels: {
+              create: original.channels.map(c => ({
+                channelId: c.channelId,
+                status: 'SCHEDULED',
+              })),
+            },
+          },
+        })
+        console.info(`[auto-actions] AUTO_REPOST scheduled for ${scheduledAt.toISOString()}`, { originalPostId: postId })
+      }
+    }
   }
 
   await prisma.autoAction.update({ where: { id: action.id }, data: { lastRunAt: new Date(), runCount: { increment: 1 } } })

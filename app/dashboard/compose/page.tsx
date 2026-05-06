@@ -21,6 +21,7 @@ import {
   Clock, Zap, X, Image as ImageIcon, Smile, Hash, Link2, Sparkles,
   Plus, Send, Calendar, RefreshCw, AlignLeft, Layers, CheckCircle2,
   TrendingUp, BarChart3, ChevronDown, GripVertical, Minus, Globe, Wand2,
+  MessageSquare, ChevronUp, Bookmark, Link, ExternalLink,
 } from 'lucide-react'
 import { PLATFORMS, PLATFORM_CHAR_LIMITS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
@@ -29,7 +30,7 @@ import { PlatformPreview } from '@/components/compose/platform-preview'
 import { createPost } from '@/lib/actions/posts'
 import { toast } from 'sonner'
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
+// --- Sub-components ---------------------------------------------------------
 
 function CharArc({ value, max, size = 36 }: { value: number; max: number; size?: number }) {
   const pct = Math.min(value / max, 1)
@@ -63,17 +64,17 @@ const HASHTAG_SUGGESTIONS = [
 ]
 
 const AI_VARIANTS = [
-  "Thrilled to share something we've been building for months — the kind of update that genuinely changes how teams work. Here's what's new 🧵",
+  "Thrilled to share something we've been building for months � the kind of update that genuinely changes how teams work. Here's what's new ??",
   "Big news dropping today. After countless iterations and user feedback sessions, we're finally ready to share what we've been building. This one matters.",
-  "We asked ourselves: what if scheduling content was actually enjoyable? Today's announcement is our answer. Swipe to see what changed 👇",
+  "We asked ourselves: what if scheduling content was actually enjoyable? Today's announcement is our answer. Swipe to see what changed ??",
 ]
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// --- Main Page ---------------------------------------------------------------
 
 function ComposeInner() {
   const searchParams = useSearchParams()
 
-  // ── Real DB channels ────────────────────────────────────────────────────────
+  // -- Real DB channels --------------------------------------------------------
   type DbChannel = {
     id: string; platform: string; handle: string; displayName: string | null
     isActive: boolean; followers: number; avatarUrl: string | null
@@ -89,7 +90,7 @@ function ComposeInner() {
       .finally(() => setChannelsLoading(false))
   }, [])
 
-  // ── Handle ?date=ISO and ?edit=ID URL params ──────────────────────────────
+  // -- Handle ?date=ISO and ?edit=ID URL params ------------------------------
   const [editId, setEditId] = useState<string | null>(null)
   useEffect(() => {
     const dateParam = searchParams.get('date')
@@ -121,6 +122,16 @@ function ComposeInner() {
             setScheduleTime(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))
             setScheduleMode('schedule')
           }
+        })
+        .catch(() => {})
+    }
+
+    const templateParam = searchParams.get('template')
+    if (templateParam && !editParam) {
+      fetch(`/api/templates/${templateParam}`)
+        .then(r => r.json())
+        .then((t: { content?: string; platforms?: string[] }) => {
+          if (t.content) setContent(t.content)
         })
         .catch(() => {})
     }
@@ -168,7 +179,7 @@ function ComposeInner() {
     .filter(c => selectedChannels.includes(c.id))
     .map(c => c.platform)
 
-  // Active preview platform — default to first selected channel's platform
+  // Active preview platform � default to first selected channel's platform
   const activePlatform = previewPlatform ?? selectedPlatforms[0] ?? null
   const activeChannel = connectedChannels.find(c =>
     selectedChannels.includes(c.id) && c.platform === activePlatform
@@ -190,11 +201,11 @@ function ComposeInner() {
 
   const handleSimulateAI = () => handleAI('variants')
 
-  // ── Labels ────────────────────────────────────────────────────────────────
+  // -- Labels ----------------------------------------------------------------
   const [labels, setLabels] = useState<string[]>([])
   const [labelInput, setLabelInput] = useState('')
 
-  // ── Signatures ───────────────────────────────────────────────────────────────
+  // -- Signatures ---------------------------------------------------------------
   type SigOption = { id: string; name: string; content: string; isDefault: boolean }
   const [signatures, setSignatures] = useState<SigOption[]>([])
   const [selectedSigId, setSelectedSigId] = useState<string | null>(null)
@@ -218,7 +229,26 @@ function ComposeInner() {
 
   // Per-platform settings (stored in PostChannel.config)
   const [platformSettings, setPlatformSettings] = useState<Record<string, Record<string, string>>>({})
+  const [platformContents, setPlatformContents] = useState<Record<string, string>>({})
   const [platformMeta, setPlatformMeta] = useState<Record<string, { lists?: {id:string;name:string}[]; communities?: {id:string;name:string}[]; companies?: {id:string;name:string}[]; subreddits?: {id:string;name:string}[]; playlists?: {id:string;name:string}[]; categories?: {id:string;name:string}[]; flairs?: {id:string;name:string}[] }>>({})
+  // First comment
+  const [firstComment, setFirstComment] = useState('')
+  const [firstCommentDelayMins, setfirstCommentDelayMins] = useState(2)
+  const [showFirstComment, setShowFirstComment] = useState(false)
+  // Short link
+  const [shortLinkUrl, setShortLinkUrl] = useState('')
+  const [shortLinkLoading, setShortLinkLoading] = useState(false)
+  const [shortLinks, setShortLinks] = useState<Array<{id:string;slug:string;originalUrl:string;clicks:number}>>([])
+  // Channel Sets
+  type ChannelSet = { id: string; name: string; description?: string | null; color?: string | null; channelIds: string[]; platformSettings: Record<string, Record<string, string>> }
+  const [channelSets, setChannelSets] = useState<ChannelSet[]>([])
+
+  useEffect(() => {
+    fetch('/api/channel-sets')
+      .then(r => r.json())
+      .then((d: { sets?: ChannelSet[] }) => setChannelSets(d.sets ?? []))
+      .catch(() => {})
+  }, [])
 
   const fetchPlatformMeta = async (platform: string, type: string, subreddit?: string) => {
     const key = `${platform}_${type}`
@@ -237,6 +267,39 @@ function ComposeInner() {
       ...prev,
       [platform]: { ...prev[platform], [key]: value },
     }))
+  }
+
+  const setPlatformContent = (platform: string, value: string) => {
+    setPlatformContents(prev => ({
+      ...prev,
+      [platform]: value,
+    }))
+  }
+
+  const handleCreateShortLink = async () => {
+    if (!shortLinkUrl.trim()) return
+    setShortLinkLoading(true)
+    try {
+      const res = await fetch('/api/short-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalUrl: shortLinkUrl.trim() }),
+      })
+      const data = await res.json() as { shortLink?: {id:string;slug:string;originalUrl:string;clicks:number}; error?: string }
+      if (data.error) throw new Error(data.error)
+      if (data.shortLink) {
+        setShortLinks(prev => [data.shortLink!, ...prev])
+        // Insert short link into content
+        const shortUrl = `${window.location.origin}/s/${data.shortLink.slug}`
+        setContent(prev => prev + (prev ? ' ' : '') + shortUrl)
+        setShortLinkUrl('')
+        toast.success('Short link created and inserted')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create short link')
+    } finally {
+      setShortLinkLoading(false)
+    }
   }
 
   const handleGenerateImage = async () => {
@@ -291,11 +354,14 @@ function ComposeInner() {
         recycleEnabled,
         recycleIntervalDays: recycleEnabled ? recycleIntervalDays : undefined,
         platformSettings,
+        platformContents,
+        firstComment: firstComment.trim() || null,
+        firstCommentDelayMins,
       })
 
       if (result.success) {
         toast.success(
-          mode === 'now' ? 'Post saved — publishing shortly'
+          mode === 'now' ? 'Post saved � publishing shortly'
           : mode === 'queue' ? 'Added to queue'
           : 'Post scheduled'
         )
@@ -395,13 +461,13 @@ function ComposeInner() {
             onClick={() => handleSubmit(scheduleMode)}
           >
             <Send className="w-3.5 h-3.5" />
-            {isSaving ? 'Saving…' : scheduleMode === 'now' ? 'Publish Now' : scheduleMode === 'queue' ? 'Add to Queue' : 'Schedule'}
+            {isSaving ? 'Saving�' : scheduleMode === 'now' ? 'Publish Now' : scheduleMode === 'queue' ? 'Add to Queue' : 'Schedule'}
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
-        {/* ─── Left Column ──────────────────────────────────────────────── */}
+        {/* --- Left Column ------------------------------------------------ */}
         <div className="space-y-4">
 
           {/* Post Type Toggle */}
@@ -500,7 +566,7 @@ function ComposeInner() {
                 <Textarea
                   value={content}
                   onChange={e => setContent(e.target.value)}
-                  placeholder="What do you want to share? Type your content here — hashtags, mentions, and links are supported..."
+                  placeholder="What do you want to share? Type your content here � hashtags, mentions, and links are supported..."
                   className="min-h-44 border-0 rounded-none resize-none focus-visible:ring-0 bg-transparent text-foreground placeholder:text-muted-foreground/50 text-sm font-light"
                 />
               )}
@@ -555,7 +621,7 @@ function ComposeInner() {
                         setLabelInput('')
                       }
                     }}
-                    placeholder={labels.length === 0 ? 'Add labels… (Enter to add)' : ''}
+                    placeholder={labels.length === 0 ? 'Add labels� (Enter to add)' : ''}
                     className="text-[11px] bg-transparent outline-none text-foreground placeholder:text-muted-foreground/40 min-w-[120px] h-5"
                   />
                 </div>
@@ -567,13 +633,13 @@ function ComposeInner() {
                   <Input
                     value={imageGenPrompt}
                     onChange={e => setImageGenPrompt(e.target.value)}
-                    placeholder="Describe image (or leave blank to use post text)…"
+                    placeholder="Describe image (or leave blank to use post text)�"
                     className="h-7 text-xs bg-input border-border flex-1"
                     onKeyDown={e => e.key === 'Enter' && handleGenerateImage()}
                   />
                   <Button size="sm" className="h-7 text-xs gap-1 px-2.5" onClick={handleGenerateImage} disabled={imageGenLoading}>
                     {imageGenLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                    {imageGenLoading ? 'Generating…' : 'Generate'}
+                    {imageGenLoading ? 'Generating�' : 'Generate'}
                   </Button>
                 </div>
               )}
@@ -609,7 +675,7 @@ function ComposeInner() {
             </Card>
           )}
 
-          {/* ── Live Preview ── */}
+          {/* -- Live Preview -- */}
           {selectedPlatforms.length > 0 && showPreview && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -748,7 +814,7 @@ function ComposeInner() {
                           <span className="text-[10px] font-medium text-accent mr-1.5">V{i + 1}</span>
                           {v}
                           <span className="block text-[10px] text-accent mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            Click to use this variant →
+                            Click to use this variant ?
                           </span>
                         </button>
                       ))}
@@ -777,8 +843,41 @@ function ComposeInner() {
           )}
         </div>
 
-        {/* ─── Right Column ─────────────────────────────────────────────── */}
+        {/* --- Right Column ----------------------------------------------- */}
         <div className="space-y-4">
+
+          {/* Channel Sets Picker */}
+          {channelSets.length > 0 && (
+            <Card className="bg-card border-border shadow-sm">
+              <div className="px-4 pt-3 pb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bookmark className="w-3.5 h-3.5 text-accent" />
+                  <h3 className="text-sm font-medium text-foreground">Channel Sets</h3>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {channelSets.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setSelectedChannels(s.channelIds)
+                        if (Object.keys(s.platformSettings).length > 0) {
+                          setPlatformSettings(s.platformSettings)
+                        }
+                        toast.success(`Applied set "${s.name}"`)
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm border border-border hover:border-accent/60 hover:bg-accent/5 transition-all text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      {s.color && (
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                      )}
+                      {s.name}
+                      <span className="text-[9px] text-muted-foreground/60">{s.channelIds.length}ch</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Channel Selector */}
           <Card className="bg-card border-border shadow-sm">
@@ -805,7 +904,7 @@ function ComposeInner() {
               ) : connectedChannels.length === 0 ? (
                 <div className="px-3 py-5 text-center">
                   <p className="text-xs text-muted-foreground mb-2">No channels connected</p>
-                  <a href="/dashboard/channels" className="text-[11px] text-accent hover:underline">Connect a channel →</a>
+                  <a href="/dashboard/channels" className="text-[11px] text-accent hover:underline">Connect a channel ?</a>
                 </div>
               ) : connectedChannels.map(channel => {
                 const plat = PLATFORMS[channel.platform]
@@ -831,7 +930,7 @@ function ComposeInner() {
                     <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{channel.handle}</p>
-                      <p className="text-[10px] text-muted-foreground">{plat.name} · {channel.followers.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground">{plat.name} � {channel.followers.toLocaleString()}</p>
                     </div>
                     {selected && overLimit && (
                       <span className="text-[9px] text-destructive font-medium flex-shrink-0">Over limit</span>
@@ -850,6 +949,7 @@ function ComposeInner() {
             <Card className="bg-card border-border shadow-sm">
               <div className="px-4 pt-3 pb-2 border-b border-border">
                 <h3 className="text-sm font-medium text-foreground">Platform Settings</h3>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Customize content and settings per platform</p>
               </div>
               <div className="divide-y divide-border">
                 {connectedChannels.filter(c => selectedChannels.includes(c.id)).map(ch => {
@@ -858,11 +958,31 @@ function ComposeInner() {
                   const Icon = plat.icon
                   const s = platformSettings[ch.platform] ?? {}
                   const meta = platformMeta[ch.platform] ?? {}
+                  const contentOverride = platformContents[ch.platform] ?? ''
+                  const platformLimit = PLATFORM_CHAR_LIMITS[ch.platform] ?? 5000
                   return (
                     <div key={ch.id} className="px-4 py-3 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Icon className="w-3 h-3 text-muted-foreground" />
                         <p className="text-xs font-medium">{plat.name}</p>
+                      </div>
+
+                      {/* Per-platform content override */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] text-muted-foreground">Content override</p>
+                          {contentOverride && (
+                            <span className={cn('text-[9px] font-mono', contentOverride.length > platformLimit ? 'text-destructive' : 'text-muted-foreground/60')}>
+                              {contentOverride.length}/{platformLimit}
+                            </span>
+                          )}
+                        </div>
+                        <Textarea
+                          value={contentOverride}
+                          onChange={e => setPlatformContent(ch.platform, e.target.value)}
+                          placeholder={`Custom text for ${plat.name} only (leave blank to use main content)`}
+                          className="min-h-16 text-xs bg-input border-border resize-none placeholder:text-muted-foreground/40"
+                        />
                       </div>
 
                       {/* Twitter/X */}
@@ -883,7 +1003,7 @@ function ComposeInner() {
                                 value={s.listId ?? ''}
                                 onChange={e => setPlatformSetting('x', 'listId', e.target.value)}
                                 onFocus={() => !meta.lists && fetchPlatformMeta('x', 'lists')}>
-                                <option value="">— None —</option>
+                                <option value="">� None �</option>
                                 {(meta.lists ?? []).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                               </select>
                             </div>
@@ -894,7 +1014,7 @@ function ComposeInner() {
                               value={s.communityId ?? ''}
                               onChange={e => setPlatformSetting('x', 'communityId', e.target.value)}
                               onFocus={() => !meta.communities && fetchPlatformMeta('x', 'communities')}>
-                              <option value="">— None —</option>
+                              <option value="">� None �</option>
                               {(meta.communities ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                           </div>
@@ -910,7 +1030,7 @@ function ComposeInner() {
                               value={s.companyId ?? ''}
                               onChange={e => setPlatformSetting('linkedin', 'companyId', e.target.value)}
                               onFocus={() => !meta.companies && fetchPlatformMeta('linkedin', 'companies')}>
-                              <option value="">— Personal profile —</option>
+                              <option value="">� Personal profile �</option>
                               {(meta.companies ?? []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                           </div>
@@ -937,7 +1057,7 @@ function ComposeInner() {
                                 if (e.target.value) fetchPlatformMeta('reddit', 'flairs', e.target.value)
                               }}
                               onFocus={() => !meta.subreddits && fetchPlatformMeta('reddit', 'subreddits')}>
-                              <option value="">— Select subreddit —</option>
+                              <option value="">� Select subreddit �</option>
                               {(meta.subreddits ?? []).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                             </select>
                           </div>
@@ -947,7 +1067,7 @@ function ComposeInner() {
                               <select className="w-full h-7 text-xs rounded border border-input bg-background px-2"
                                 value={s.flairId ?? ''}
                                 onChange={e => setPlatformSetting('reddit', 'flairId', e.target.value)}>
-                                <option value="">— No flair —</option>
+                                <option value="">� No flair �</option>
                                 {(meta.flairs ?? []).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                               </select>
                             </div>
@@ -974,7 +1094,7 @@ function ComposeInner() {
                               value={s.playlistId ?? ''}
                               onChange={e => setPlatformSetting('youtube', 'playlistId', e.target.value)}
                               onFocus={() => !meta.playlists && fetchPlatformMeta('youtube', 'playlists')}>
-                              <option value="">— None —</option>
+                              <option value="">� None �</option>
                               {(meta.playlists ?? []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                           </div>
@@ -1006,6 +1126,107 @@ function ComposeInner() {
               </div>
             </Card>
           )}
+
+          {/* First Comment */}
+          <Card className="bg-card border-border shadow-sm overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+              onClick={() => setShowFirstComment(p => !p)}
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-3.5 h-3.5 text-accent" />
+                <span className="text-sm font-medium text-foreground">First Comment</span>
+                {firstComment.trim() && (
+                  <span className="text-[9px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-sm font-medium">Set</span>
+                )}
+              </div>
+              {showFirstComment ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            </button>
+            {showFirstComment && (
+              <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+                <p className="text-[10px] text-muted-foreground">
+                  Automatically post a comment after publishing. Great for adding a CTA, link, or pinned context.
+                </p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px]">Comment text</Label>
+                    <span className={cn('text-[9px] font-mono', firstComment.length > 500 ? 'text-destructive' : 'text-muted-foreground/60')}>
+                      {firstComment.length}/500
+                    </span>
+                  </div>
+                  <Textarea
+                    value={firstComment}
+                    onChange={e => setFirstComment(e.target.value)}
+                    placeholder="Add your first comment here � e.g. full article link, sign up CTA, thread intro�"
+                    className="min-h-20 text-xs bg-input border-border resize-none placeholder:text-muted-foreground/40"
+                    maxLength={500}
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="text-[10px] text-muted-foreground flex-shrink-0">Post after</Label>
+                  <Select value={String(firstCommentDelayMins)} onValueChange={v => setfirstCommentDelayMins(Number(v))}>
+                    <SelectTrigger className="h-7 text-xs bg-input border-border w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Immediately</SelectItem>
+                      <SelectItem value="1">1 minute</SelectItem>
+                      <SelectItem value="2">2 minutes</SelectItem>
+                      <SelectItem value="5">5 minutes</SelectItem>
+                      <SelectItem value="10">10 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="60">1 hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {firstComment.trim() && (
+                  <div className="p-2.5 rounded-sm bg-accent/5 border border-accent/15 space-y-1">
+                    <p className="text-[9px] font-medium text-accent uppercase tracking-widest">Preview</p>
+                    <p className="text-[11px] text-muted-foreground whitespace-pre-wrap">{firstComment}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Short Link Creator */}
+          <Card className="bg-card border-border shadow-sm p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Link className="w-3.5 h-3.5 text-accent" />
+              <span className="text-xs font-medium text-foreground">Short Link</span>
+              <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm">track clicks</span>
+            </div>
+            <div className="flex gap-1.5">
+              <Input
+                value={shortLinkUrl}
+                onChange={e => setShortLinkUrl(e.target.value)}
+                placeholder="https://your-long-url.com/article�"
+                className="h-7 text-xs bg-input border-border flex-1"
+                onKeyDown={e => e.key === 'Enter' && handleCreateShortLink()}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1 px-2.5 flex-shrink-0"
+                onClick={handleCreateShortLink}
+                disabled={shortLinkLoading || !shortLinkUrl.trim()}
+              >
+                {shortLinkLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+                Shorten
+              </Button>
+            </div>
+            {shortLinks.length > 0 && (
+              <div className="space-y-1 max-h-24 overflow-y-auto">
+                {shortLinks.map(l => (
+                  <div key={l.id} className="flex items-center gap-2 text-[10px]">
+                    <span className="text-accent font-mono">/s/{l.slug}</span>
+                    <span className="text-muted-foreground flex-1 truncate">{l.originalUrl}</span>
+                    <span className="text-muted-foreground/60">{l.clicks} clicks</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
 
           {/* Schedule */}
           <Card className="bg-card border-border shadow-sm">

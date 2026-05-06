@@ -25,24 +25,26 @@ const TREND_DATA: Record<Period, { date: string; impressions: number; engagement
     { date: 'Sat', impressions: 16800, engagement: 1120, followers: 64 },
     { date: 'Sun', impressions: 19400, engagement: 1300, followers: 72 },
   ],
+  // Deterministic 30-day pattern using sine waves (no Math.random)
   '30d': Array.from({ length: 30 }, (_, i) => ({
     date: `D${i + 1}`,
-    impressions: 8000 + Math.random() * 20000,
-    engagement: 400 + Math.random() * 1500,
-    followers: 20 + Math.random() * 120,
+    impressions: Math.round(12000 + Math.sin(i * 0.42) * 6000 + Math.cos(i * 0.19) * 3500 + i * 220),
+    engagement:  Math.round(600  + Math.sin(i * 0.55) * 350  + Math.cos(i * 0.28) * 180  + i * 12),
+    followers:   Math.round(30   + Math.sin(i * 0.38) * 22   + Math.cos(i * 0.61) * 12   + i * 2),
   })),
-  '90d': Array.from({ length: 12 }, (_, i) => ({
+  // Deterministic 90-day pattern (weekly buckets)
+  '90d': Array.from({ length: 13 }, (_, i) => ({
     date: `W${i + 1}`,
-    impressions: 60000 + Math.random() * 80000,
-    engagement: 3000 + Math.random() * 8000,
-    followers: 180 + Math.random() * 600,
+    impressions: Math.round(72000 + Math.sin(i * 0.60) * 28000 + Math.cos(i * 0.25) * 15000 + i * 3200),
+    engagement:  Math.round(3800  + Math.sin(i * 0.72) * 1800  + Math.cos(i * 0.33) * 900   + i * 120),
+    followers:   Math.round(210   + Math.sin(i * 0.48) * 130   + Math.cos(i * 0.55) * 70    + i * 28),
   })),
 }
 
 const PIE_COLORS = ['oklch(0.390 0.072 55)', 'oklch(0.520 0.095 178)', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444']
 
-function MetricCard({ label, value, change, trend, icon: Icon }: {
-  label: string; value: string; change: string; trend: 'up' | 'down' | 'flat'; icon: React.ElementType
+function MetricCard({ label, value, subtext, trend, icon: Icon, isEmpty }: {
+  label: string; value: string; subtext: string; trend: 'up' | 'down' | 'flat'; icon: React.ElementType; isEmpty?: boolean
 }) {
   return (
     <Card className="bg-card border-border shadow-sm p-4">
@@ -50,14 +52,23 @@ function MetricCard({ label, value, change, trend, icon: Icon }: {
         <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-widest">{label}</p>
         <Icon className="w-3.5 h-3.5 text-muted-foreground" />
       </div>
-      <p className="text-2xl font-light text-foreground">{value}</p>
-      <p className={cn('text-xs mt-1 flex items-center gap-0.5',
-        trend === 'up' ? 'text-emerald-600 dark:text-emerald-400' :
-        trend === 'down' ? 'text-destructive' : 'text-muted-foreground')}>
-        {trend === 'up' && <TrendingUp className="w-3 h-3" />}
-        {trend === 'down' && <TrendingDown className="w-3 h-3" />}
-        {change}
-      </p>
+      {isEmpty ? (
+        <>
+          <div className="h-7 w-16 rounded bg-muted/50 animate-none" />
+          <p className="text-[10px] text-muted-foreground/50 mt-1.5">No data yet</p>
+        </>
+      ) : (
+        <>
+          <p className="text-2xl font-light text-foreground">{value}</p>
+          <p className={cn('text-xs mt-1 flex items-center gap-0.5',
+            trend === 'up' ? 'text-emerald-600 dark:text-emerald-400' :
+            trend === 'down' ? 'text-destructive' : 'text-muted-foreground')}>
+            {trend === 'up' && <TrendingUp className="w-3 h-3" />}
+            {trend === 'down' && <TrendingDown className="w-3 h-3" />}
+            {subtext}
+          </p>
+        </>
+      )}
     </Card>
   )
 }
@@ -120,6 +131,9 @@ export default function AnalyticsPage() {
 
   const heatmaxVal = heatmap.length > 0 ? Math.max(...heatmap.map(c => c.value)) : 1
 
+  const hasRealData = !loading && !!data?.hasData
+  const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString()
+
   return (
     <div className="space-y-5 pb-6">
       {/* Controls */}
@@ -145,34 +159,50 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* No-data banner */}
+      {!loading && !hasRealData && (
+        <Card className="bg-accent/5 border-accent/20 px-5 py-3.5 flex items-center gap-3">
+          <Zap className="w-4 h-4 text-accent flex-shrink-0" />
+          <div>
+            <p className="text-xs font-medium text-foreground">No analytics data yet</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              The chart below shows sample data. Real numbers will appear once you publish posts with connected channels.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
-          label="Impressions" icon={Eye} trend="up"
-          value={loading ? '—' : totals ? (totals.impressions >= 1000 ? `${(totals.impressions / 1000).toFixed(1)}K` : totals.impressions.toLocaleString()) : '0'}
-          change={loading ? '…' : totals ? `${totals.impressions.toLocaleString()} total` : 'No data yet'}
+          label="Impressions" icon={Eye} trend="up" isEmpty={loading || !hasRealData}
+          value={fmt(totals?.impressions ?? 0)}
+          subtext={totals ? `${fmt(totals.impressions)} total` : ''}
         />
         <MetricCard
-          label="Engagements" icon={Heart} trend="up"
-          value={loading ? '—' : totals ? (totals.engagement >= 1000 ? `${(totals.engagement / 1000).toFixed(1)}K` : totals.engagement.toLocaleString()) : '0'}
-          change={loading ? '…' : totals ? `${totals.likes} likes · ${totals.shares} shares` : 'No data yet'}
+          label="Engagements" icon={Heart} trend="up" isEmpty={loading || !hasRealData}
+          value={fmt(totals?.engagement ?? 0)}
+          subtext={totals ? `${totals.likes} likes · ${totals.shares} shares` : ''}
         />
         <MetricCard
-          label="Comments" icon={MessageCircle} trend="flat"
-          value={loading ? '—' : totals ? totals.comments.toLocaleString() : '0'}
-          change={loading ? '…' : 'From analytics data'}
+          label="Comments" icon={MessageCircle} trend="flat" isEmpty={loading || !hasRealData}
+          value={(totals?.comments ?? 0).toLocaleString()}
+          subtext="From analytics data"
         />
         <MetricCard
-          label="Reach" icon={Users} trend="up"
-          value={loading ? '—' : totals ? (totals.reach >= 1000 ? `${(totals.reach / 1000).toFixed(1)}K` : totals.reach.toLocaleString()) : '0'}
-          change={loading ? '…' : 'Unique accounts reached'}
+          label="Reach" icon={Users} trend="up" isEmpty={loading || !hasRealData}
+          value={fmt(totals?.reach ?? 0)}
+          subtext="Unique accounts reached"
         />
       </div>
 
       {/* Main trend chart */}
       <Card className="bg-card border-border shadow-sm">
-        <div className="px-5 py-3 border-b border-border">
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground capitalize">{metric} over time</h2>
+          {!hasRealData && !loading && (
+            <Badge className="text-[10px] border-0 bg-muted text-muted-foreground">Sample data</Badge>
+          )}
         </div>
         <div className="p-5">
           <ResponsiveContainer width="100%" height={230}>

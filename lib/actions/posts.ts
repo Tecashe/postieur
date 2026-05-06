@@ -37,6 +37,10 @@ const CreatePostSchema = z.object({
   recycleEnabled: z.boolean().default(false),
   recycleIntervalDays: z.number().int().min(1).optional(),
   platformSettings: z.record(z.record(z.string())).default({}),
+  platformContents: z.record(z.string()).default({}),
+  firstComment: z.string().max(2000).optional().nullable(),
+  firstCommentDelayMins: z.number().int().min(0).max(60).default(0),
+  channelSetId: z.string().optional().nullable(),
 })
 
 export type CreatePostInput = z.infer<typeof CreatePostSchema>
@@ -81,6 +85,10 @@ export async function createPost(input: CreatePostInput) {
       recycleNextAt: data.recycleEnabled && data.recycleIntervalDays
         ? new Date(Date.now() + data.recycleIntervalDays * 86400_000)
         : null,
+      platformContents: data.platformContents,
+      firstComment: data.firstComment ?? null,
+      firstCommentDelayMins: data.firstCommentDelayMins,
+      channelSetId: data.channelSetId ?? null,
       createdById: userId,
       channels: data.channelIds.length > 0 ? {
         create: data.channelIds.map(channelId => ({

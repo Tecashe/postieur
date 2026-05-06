@@ -13,8 +13,10 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   AlertTriangle, CreditCard, Trash2, Check, Copy, Calendar, Hash, Link2,
   Plus, Edit3, Star, RefreshCw, ShieldCheck, Key, Webhook, Eye, EyeOff,
-  Globe, Zap, ToggleLeft, ToggleRight,
+  Globe, Zap, ToggleLeft, ToggleRight, Bookmark, X,
 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 const TIMEZONES = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
@@ -37,6 +39,186 @@ type NotifPref  = { type: string; emailEnabled: boolean; inAppEnabled: boolean }
 type Signature  = { id: string; name: string; content: string; isDefault: boolean; userId: string | null }
 type ApiKey     = { id: string; name: string; prefix: string; scopes: string[]; status: string; lastUsedAt: string | null; createdAt: string }
 type Webhook    = { id: string; name: string; url: string; events: string[]; isActive: boolean; successCount: number; failureCount: number; lastTriggeredAt: string | null; createdAt: string }
+
+// ─── Channel Sets Panel ────────────────────────────────────────────────────────
+type ChannelSet = { id: string; name: string; description?: string | null; color?: string | null; channelIds: string[]; platformSettings: Record<string,unknown> }
+type DbChannel = { id: string; platform: string; handle: string; displayName: string | null }
+
+const SET_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6']
+
+function ChannelSetsPanel({ canEdit }: { canEdit: boolean }) {
+  const [sets, setSets] = useState<ChannelSet[]>([])
+  const [channels, setChannels] = useState<DbChannel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [editSet, setEditSet] = useState<ChannelSet | null>(null)
+  const [name, setName] = useState('')
+  const [desc, setDesc] = useState('')
+  const [color, setColor] = useState(SET_COLORS[0])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    Promise.all([
+      fetch('/api/channel-sets').then(r => r.json()),
+      fetch('/api/channels').then(r => r.json()),
+    ]).then(([s, c]: [{ sets?: ChannelSet[] }, DbChannel[]]) => {
+      setSets(s.sets ?? [])
+      setChannels(Array.isArray(c) ? c : [])
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const openNew = () => {
+    setEditSet(null); setName(''); setDesc(''); setColor(SET_COLORS[0]); setSelectedIds([]); setShowNew(true)
+  }
+  const openEdit = (s: ChannelSet) => {
+    setEditSet(s); setName(s.name); setDesc(s.description ?? ''); setColor(s.color ?? SET_COLORS[0]); setSelectedIds(s.channelIds); setShowNew(true)
+  }
+  const close = () => { setShowNew(false); setEditSet(null) }
+
+  const handleSave = async () => {
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      if (editSet) {
+        await fetch(`/api/channel-sets/${editSet.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), description: desc.trim() || null, color, channelIds: selectedIds }),
+        })
+      } else {
+        await fetch('/api/channel-sets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), description: desc.trim() || null, color, channelIds: selectedIds }),
+        })
+      }
+      close(); load()
+    } catch { /* ignore */ }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id)
+    await fetch(`/api/channel-sets/${id}`, { method: 'DELETE' }).catch(() => {})
+    setSets(prev => prev.filter(s => s.id !== id))
+    setDeleting(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-foreground">Channel Sets</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Named groups of channels — apply them in the composer to post to all at once with saved settings.</p>
+        </div>
+        {canEdit && (
+          <Button size="sm" className="gap-1.5 text-xs" onClick={openNew}>
+            <Plus className="w-3.5 h-3.5" /> New Set
+          </Button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-16 rounded-sm bg-muted/30 animate-pulse" />)}</div>
+      ) : sets.length === 0 ? (
+        <Card className="bg-card border-border p-8 text-center">
+          <Bookmark className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">No channel sets yet</p>
+          <p className="text-[11px] text-muted-foreground/70 mt-1">Create a set to quickly select a group of channels in the composer.</p>
+          {canEdit && <Button size="sm" className="mt-3 text-xs gap-1.5" onClick={openNew}><Plus className="w-3.5 h-3.5" />New Set</Button>}
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {sets.map(s => (
+            <Card key={s.id} className="bg-card border-border p-4 flex items-start gap-3">
+              <span className="w-3 h-3 rounded-full mt-1 flex-shrink-0" style={{ background: s.color ?? '#6366f1' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">{s.name}</p>
+                {s.description && <p className="text-[11px] text-muted-foreground mt-0.5">{s.description}</p>}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {s.channelIds.slice(0, 6).map(id => {
+                    const ch = channels.find(c => c.id === id)
+                    return ch ? (
+                      <span key={id} className="text-[9px] px-1.5 py-0.5 bg-muted rounded-sm text-muted-foreground">{ch.handle}</span>
+                    ) : null
+                  })}
+                  {s.channelIds.length > 6 && <span className="text-[9px] text-muted-foreground">+{s.channelIds.length - 6} more</span>}
+                  {s.channelIds.length === 0 && <span className="text-[9px] text-muted-foreground italic">No channels</span>}
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(s)}><Edit3 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" disabled={deleting === s.id} onClick={() => handleDelete(s.id)}>
+                    {deleting === s.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={showNew} onOpenChange={close}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{editSet ? 'Edit Channel Set' : 'New Channel Set'}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name</Label>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Product Launch, Daily Posts…" className="h-8 text-sm bg-input border-border" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description (optional)</Label>
+              <Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Brief description of when to use this set" className="h-8 text-sm bg-input border-border" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Color</Label>
+              <div className="flex gap-2 flex-wrap">
+                {SET_COLORS.map(c => (
+                  <button key={c} onClick={() => setColor(c)} className={cn('w-6 h-6 rounded-full transition-all', color === c ? 'ring-2 ring-offset-2 ring-foreground' : '')} style={{ background: c }} />
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Channels ({selectedIds.length} selected)</Label>
+              <div className="max-h-40 overflow-y-auto space-y-0.5 border border-border rounded-sm p-1.5">
+                {channels.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground px-2 py-1">No channels connected yet.</p>
+                ) : channels.map(ch => (
+                  <button
+                    key={ch.id}
+                    onClick={() => setSelectedIds(prev => prev.includes(ch.id) ? prev.filter(id => id !== ch.id) : [...prev, ch.id])}
+                    className={cn('w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-xs transition-all text-left',
+                      selectedIds.includes(ch.id) ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                    )}
+                  >
+                    <div className={cn('w-3.5 h-3.5 rounded-sm border flex items-center justify-center flex-shrink-0',
+                      selectedIds.includes(ch.id) ? 'bg-primary border-primary' : 'border-border'
+                    )}>
+                      {selectedIds.includes(ch.id) && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+                    </div>
+                    <span className="font-mono text-[10px] text-muted-foreground uppercase w-12 flex-shrink-0">{ch.platform.slice(0,2)}</span>
+                    {ch.handle}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={close}>Cancel</Button>
+            <Button disabled={!name.trim() || saving} onClick={handleSave}>
+              {saving ? <><RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />Saving…</> : editSet ? 'Save Changes' : 'Create Set'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const { organization, membership } = useOrganization()
@@ -315,7 +497,7 @@ export default function SettingsPage() {
     <div className="max-w-2xl space-y-5 pb-6">
       <Tabs defaultValue="workspace">
         <TabsList className="bg-muted border border-border h-9 p-1 gap-0.5 flex-wrap">
-          {[['workspace','Workspace'], ['notifications','Notifications'], ['timezone','Date & Time'], ['signatures','Signatures'], ['integrations','Integrations'], ['billing','Billing']].map(([v, l]) => (
+          {[['workspace','Workspace'], ['notifications','Notifications'], ['timezone','Date & Time'], ['signatures','Signatures'], ['channel-sets','Channel Sets'], ['integrations','Integrations'], ['billing','Billing']].map(([v, l]) => (
             <TabsTrigger key={v} value={v} className="text-xs data-[state=active]:bg-card data-[state=active]:text-foreground">{l}</TabsTrigger>
           ))}
         </TabsList>
@@ -570,6 +752,11 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        {/* ── Channel Sets ─────────────────────────────────────────────────────── */}
+        <TabsContent value="channel-sets" className="mt-5">
+          <ChannelSetsPanel canEdit={canEdit} />
         </TabsContent>
 
         {/* ── Integrations ─────────────────────────────────────────────────────── */}

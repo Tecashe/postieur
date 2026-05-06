@@ -202,49 +202,101 @@ export async function POST(req: Request) {
 
   const history = messages.slice(-20)
 
-  // Agentic loop — up to 5 tool-call iterations
   const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...history,
   ]
 
-  for (let i = 0; i < 5; i++) {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: apiMessages,
-      tools,
-      tool_choice: 'auto',
-      max_tokens: 800,
-      temperature: 0.7,
-    })
+  // Return a streaming response via SSE
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encode = (data: string) =>
+        controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`))
 
-    const msg = response.choices[0]?.message
-    if (!msg) break
+      try {
+        // Agentic loop — up to 5 tool-call iterations
+        for (let i = 0; i < 5; i++) {
+          const isLastIter = i === 4
 
-    apiMessages.push(msg)
+          const response = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: apiMessages,
+            tools,
+            tool_choice: isLastIter ? 'none' : 'auto',
+            max_tokens: 1000,
+            temperature: 0.7,
+            stream: true,
+          })
 
-    // No tool calls — we have the final reply
-    if (!msg.tool_calls?.length) {
-      return NextResponse.json({ reply: msg.content ?? '' })
-    }
+          let fullContent = ''
+          const toolCallsMap: Record<string, { id: string; name: string; argsRaw: string }> = {}
 
-    // Execute all tool calls
-    for (const toolCall of msg.tool_calls) {
-      let toolArgs: Record<string, unknown> = {}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tc = toolCall as any
-      try { toolArgs = JSON.parse(tc.function.arguments) } catch {}
-      const result = await handleToolCall(tc.function.name, toolArgs, workspace.id, userId)
-      apiMessages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: result,
-      })
-    }
-  }
+          for await (const chunk of response) {
+            const delta = chunk.choices[0]?.delta
 
-  // Fallback if loop exhausted
-  const lastMsg = apiMessages[apiMessages.length - 1]
-  const fallbackContent = typeof lastMsg?.content === 'string' ? lastMsg.content : 'Done.'
-  return NextResponse.json({ reply: fallbackContent })
+            // Stream text tokens
+            if (delta?.content) {
+              fullContent += delta.content
+              encode(JSON.stringify({ type: 'token', content: delta.content }))
+            }
+
+            // Accumulate tool calls (streamed piecemeal)
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = String(tc.index)
+                if (!toolCallsMap[idx]) {
+                  toolCallsMap[idx] = { id: tc.id ?? '', name: tc.function?.name ?? '', argsRaw: '' }
+                }
+                if (tc.id) toolCallsMap[idx].id = tc.id
+                if (tc.function?.name) toolCallsMap[idx].name += tc.function.name
+                if (tc.function?.arguments) toolCallsMap[idx].argsRaw += tc.function.arguments
+              }
+            }
+          }
+
+          const toolCalls = Object.values(toolCallsMap)
+
+          if (toolCalls.length === 0) {
+            // Final text reply — done
+            encode(JSON.stringify({ type: 'done', content: fullContent }))
+            break
+          }
+
+          // Notify client about tool calls in progress
+          encode(JSON.stringify({ type: 'tool_start', tools: toolCalls.map(t => t.name) }))
+
+          // Reconstruct assistant message with tool_calls
+          const assistantMsg: OpenAI.Chat.ChatCompletionMessageParam = {
+            role: 'assistant',
+            content: fullContent || null,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            tool_calls: toolCalls.map(t => ({ id: t.id, type: 'function' as const, function: { name: t.name, arguments: t.argsRaw } })) as any,
+          }
+          apiMessages.push(assistantMsg)
+
+          // Execute tools
+          for (const tc of toolCalls) {
+            let args: Record<string, unknown> = {}
+            try { args = JSON.parse(tc.argsRaw) } catch {}
+            encode(JSON.stringify({ type: 'tool_exec', name: tc.name }))
+            const result = await handleToolCall(tc.name, args, workspace.id, userId)
+            encode(JSON.stringify({ type: 'tool_result', name: tc.name, preview: result.slice(0, 200) }))
+            apiMessages.push({ role: 'tool', tool_call_id: tc.id, content: result })
+          }
+        }
+      } catch (err) {
+        encode(JSON.stringify({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' }))
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }

@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core'
@@ -16,57 +16,107 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
 import {
   GripVertical, Plus, Clock, Trash2, Zap, LayoutGrid, List,
-  Calendar, CheckCircle2, XCircle, ShieldAlert,
+  CheckCircle2, XCircle, ShieldAlert, RefreshCw, Pencil, CalendarClock,
+  ArrowDown,
 } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { PLATFORMS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { Post } from '@/lib/types'
 
 type QueueSlot = { id: string; dayOfWeek: number; hour: number; minute: number; platforms: string[]; isActive: boolean }
 type PendingPost = { id: string; content: string; createdAt: string; channels: Array<{ channel: { platform: string } }>; approvalNote?: string }
+// Post extended with all channel platforms
+type QueuePost = Post & { allPlatforms: string[] }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 // ── Sortable row ────────────────────────────────────────────────────────────
-function SortableRow({ post, onRemove }: { post: Post; onRemove: (id: string) => void }) {
+function SortableRow({
+  post, onRemove, isRemoving,
+}: {
+  post: QueuePost
+  onRemove: (id: string) => void
+  isRemoving: boolean
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: post.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
-  const Icon = PLATFORMS[post.platforms[0]]?.icon
-  const dt = new Date(post.scheduledAt ?? Date.now())
+  const dt = post.scheduledAt ? new Date(post.scheduledAt) : null
+  const uniquePlatforms = [...new Set(post.allPlatforms)]
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 transition-all bg-card',
-        isDragging ? 'shadow-md opacity-90 z-10 relative rounded-sm' : 'hover:bg-muted/20'
+        'flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 transition-all bg-card group',
+        isDragging ? 'shadow-lg opacity-95 z-10 relative rounded-md ring-1 ring-accent/30' : 'hover:bg-muted/20',
+        isRemoving && 'opacity-40 pointer-events-none',
       )}
     >
-      <button {...attributes} {...listeners} className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing">
+      {/* Drag handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        className="text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing transition-colors flex-shrink-0 touch-none"
+      >
         <GripVertical className="w-4 h-4" />
       </button>
-      {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-foreground line-clamp-1">{post.content}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">
-          {dt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-          {' · '}{dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </p>
+
+      {/* Platform icons */}
+      <div className="flex gap-0.5 flex-shrink-0">
+        {uniquePlatforms.slice(0, 4).map(pl => {
+          const Icon = PLATFORMS[pl as keyof typeof PLATFORMS]?.icon
+          return Icon ? <Icon key={pl} className="w-3.5 h-3.5 text-muted-foreground/70" /> : null
+        })}
+        {uniquePlatforms.length > 4 && (
+          <span className="text-[10px] text-muted-foreground ml-0.5">+{uniquePlatforms.length - 4}</span>
+        )}
       </div>
-      <Badge className={cn('text-[10px] border-0 flex-shrink-0',
-        post.status === 'scheduled' ? 'bg-accent/10 text-accent' :
-        post.status === 'published' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-        'bg-muted text-muted-foreground')}>
-        {post.status}
+
+      {/* Content + time */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-foreground line-clamp-1 leading-relaxed">{post.content}</p>
+        <div className="flex items-center gap-1 mt-0.5">
+          <CalendarClock className="w-2.5 h-2.5 text-muted-foreground/50 flex-shrink-0" />
+          <p className="text-[10px] text-muted-foreground">
+            {dt
+              ? `${dt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+              : 'No time set'}
+          </p>
+        </div>
+      </div>
+
+      {/* Status badge */}
+      <Badge className={cn(
+        'text-[10px] border-0 flex-shrink-0',
+        'bg-accent/10 text-accent',
+      )}>
+        Scheduled
       </Badge>
-      <button onClick={() => onRemove(post.id)} className="text-muted-foreground/40 hover:text-destructive transition-colors ml-1">
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+
+      {/* Row actions — visible on hover */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <Link
+          href={`/dashboard/compose?edit=${post.id}`}
+          className="flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
+          aria-label="Edit post"
+        >
+          <Pencil className="w-3 h-3" />
+        </Link>
+        <button
+          onClick={() => onRemove(post.id)}
+          className="flex items-center justify-center w-6 h-6 rounded-sm text-muted-foreground/50 hover:text-destructive hover:bg-destructive/8 transition-colors"
+          aria-label="Remove from queue"
+          disabled={isRemoving}
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -78,10 +128,14 @@ export default function QueuePage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const [posts, setPosts] = useState<Post[]>([])
+  const [posts, setPosts] = useState<QueuePost[]>([])
   const [viewMode, setViewMode] = useState<'list' | 'slots'>('list')
   const [autoQueue, setAutoQueue] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [reorderSaving, setReorderSaving] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  // Keep a stable ref to previous posts list for rollback
+  const prevPostsRef = useRef<QueuePost[]>([])
 
   // ── Queue slots ─────────────────────────────────────────────────────────────
   const [slots, setSlots] = useState<QueueSlot[]>([])
@@ -107,14 +161,17 @@ export default function QueuePage() {
         mediaUrls: string[]; channels: Array<{ channel: { platform: string } }>
         analytics: null
       }>) => {
-        setPosts(data.map(p => ({
+        const mapped = data.map(p => ({
           id: p.id,
           content: p.content,
-          platforms: (p.channels.map(c => c.channel.platform) as Post['platforms']).slice(0, 1),
+          platforms: [p.channels[0]?.channel?.platform ?? 'twitter'] as Post['platforms'],
+          allPlatforms: [...new Set(p.channels.map(c => c.channel.platform))],
           scheduledAt: p.scheduledAt ? new Date(p.scheduledAt) : new Date(),
           status: 'scheduled' as const,
           mediaUrls: p.mediaUrls,
-        })))
+        }))
+        setPosts(mapped)
+        prevPostsRef.current = mapped
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -134,18 +191,69 @@ export default function QueuePage() {
       .catch(() => {})
   }, [])
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  // ── Drag-reorder with persistence ──────────────────────────────────────────
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event
-    if (over && active.id !== over.id) {
-      setPosts(items => {
-        const oldIdx = items.findIndex(i => i.id === active.id)
-        const newIdx = items.findIndex(i => i.id === over.id)
-        return arrayMove(items, oldIdx, newIdx)
-      })
-    }
-  }
+    if (!over || active.id === over.id) return
 
-  const handleRemove = (id: string) => setPosts(items => items.filter(i => i.id !== id))
+    const oldIdx = posts.findIndex(p => p.id === active.id)
+    const newIdx = posts.findIndex(p => p.id === over.id)
+    if (oldIdx === -1 || newIdx === -1) return
+
+    // Optimistic reorder
+    const reordered = arrayMove(posts, oldIdx, newIdx)
+    prevPostsRef.current = posts          // save for rollback
+    setPosts(reordered)
+
+    // Re-slot scheduledAt values: assign sorted timestamps to new order
+    const sortedTimes = [...posts]
+      .sort((a, b) => (a.scheduledAt?.getTime() ?? 0) - (b.scheduledAt?.getTime() ?? 0))
+      .map(p => p.scheduledAt)
+    const withNewTimes = reordered.map((p, i) => ({ ...p, scheduledAt: sortedTimes[i] ?? p.scheduledAt }))
+    setPosts(withNewTimes)
+
+    setReorderSaving(true)
+    try {
+      const res = await fetch('/api/posts/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: reordered.map(p => p.id) }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      toast.success('Queue order saved', { duration: 2000 })
+    } catch {
+      // Rollback to pre-drag state
+      setPosts(prevPostsRef.current)
+      toast.error('Failed to save queue order — changes reverted')
+    } finally {
+      setReorderSaving(false)
+    }
+  }, [posts])
+
+  // ── Remove from queue (unschedule → DRAFT) ─────────────────────────────────
+  const handleRemove = useCallback(async (id: string) => {
+    const prev = posts
+    setRemovingId(id)
+    // Optimistic removal
+    setPosts(items => items.filter(p => p.id !== id))
+    prevPostsRef.current = prev
+
+    try {
+      const res = await fetch(`/api/posts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'DRAFT', scheduledAt: null }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Post moved to Drafts')
+    } catch {
+      // Rollback
+      setPosts(prevPostsRef.current)
+      toast.error('Failed to remove post — try again')
+    } finally {
+      setRemovingId(null)
+    }
+  }, [posts])
 
   async function handleAddSlot() {
     if (slotPlatforms.length === 0) return
@@ -272,7 +380,19 @@ export default function QueuePage() {
         {/* Queue list */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">{posts.length} posts in queue · Drag to reorder</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">{posts.length} post{posts.length !== 1 ? 's' : ''} in queue</p>
+              {reorderSaving && (
+                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Saving order…
+                </span>
+              )}
+              {!reorderSaving && posts.length > 0 && (
+                <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1">
+                  <ArrowDown className="w-2.5 h-2.5" /> Drag to reorder
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-muted-foreground">Auto-fill</Label>
               <Switch checked={autoQueue} onCheckedChange={setAutoQueue} className="data-[state=checked]:bg-accent scale-90" />
@@ -282,21 +402,26 @@ export default function QueuePage() {
           <Card className="bg-card border-border shadow-sm overflow-hidden">
             {loading ? (
               <div className="space-y-px">
-                {[1,2,3].map(i => <div key={i} className="h-14 bg-muted/20 animate-pulse" />)}
+                {[1,2,3].map(i => <div key={i} className="h-[58px] bg-muted/20 animate-pulse" />)}
               </div>
             ) : posts.length === 0 ? (
               <div className="py-16 text-center">
                 <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">Queue is empty</p>
                 <Button asChild variant="ghost" size="sm" className="mt-3 text-xs text-accent hover:bg-accent/5">
-                  <Link href="/dashboard/compose">Add your first post</Link>
+                  <Link href="/dashboard/compose">Schedule your first post</Link>
                 </Button>
               </div>
             ) : (
               <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={handleDragEnd}>
                 <SortableContext items={posts.map(p => p.id)} strategy={verticalListSortingStrategy}>
                   {posts.map(post => (
-                    <SortableRow key={post.id} post={post} onRemove={handleRemove} />
+                    <SortableRow
+                      key={post.id}
+                      post={post}
+                      onRemove={handleRemove}
+                      isRemoving={removingId === post.id}
+                    />
                   ))}
                 </SortableContext>
               </DndContext>

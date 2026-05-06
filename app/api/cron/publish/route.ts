@@ -46,12 +46,16 @@ export async function GET(request: NextRequest) {
         data: { status: 'PUBLISHING' },
       })
 
-      const publisherPost: PublisherPost = {
+      // Per-platform content overrides (stored as Json in DB, cast to Record<string,string>)
+      const rawPlatformContents = (post.platformContents ?? {}) as Record<string, string>
+
+      const basePublisherPost: PublisherPost = {
         id: post.id,
         content: post.content,
         type: post.type,
         mediaUrls: post.mediaUrls,
         threadPosts: post.threadPosts.length > 1 ? post.threadPosts : [post.content],
+        platformContents: rawPlatformContents,
       }
 
       const channelResults: Array<{
@@ -88,6 +92,13 @@ export async function GET(request: NextRequest) {
 
         const channelConfig = (postChannel.config ?? {}) as PostChannelConfig
 
+        // Apply per-platform content override if one exists for this channel's platform
+        const platformKey = ch.platform.toLowerCase()
+        const contentOverride = rawPlatformContents[platformKey]
+        const publisherPost: PublisherPost = contentOverride
+          ? { ...basePublisherPost, content: contentOverride, threadPosts: [contentOverride] }
+          : basePublisherPost
+
         const result = await publish(publisherPost, publisherChannel, channelConfig)
 
         // Update PostChannel record with per-channel result
@@ -108,6 +119,24 @@ export async function GET(request: NextRequest) {
           error: result.error,
           externalId: result.externalId,
         })
+
+        // Queue first comment if post has one and we got a platformPostId
+        const firstComment = (post as { firstComment?: string | null }).firstComment
+        const delayMin = (post as { firstCommentDelayMins?: number }).firstCommentDelayMins ?? 0
+        if (result.success && result.externalId && firstComment) {
+          const fireAt = new Date(now.getTime() + delayMin * 60_000)
+          await prisma.pendingComment.create({
+            data: {
+              postId: post.id,
+              channelId: ch.id,
+              platform: ch.platform,
+              content: firstComment,
+              platformPostId: result.externalId,
+              fireAt,
+              status: 'PENDING',
+            },
+          }).catch(() => {}) // non-blocking
+        }
       }
 
       const anySuccess = channelResults.some((r) => r.success)

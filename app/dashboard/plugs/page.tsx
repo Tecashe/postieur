@@ -12,17 +12,17 @@ import { Zap, Plus, Trash2, RefreshCw } from 'lucide-react'
 
 interface AutoAction { id: string; name: string; trigger: string; action: string; isEnabled: boolean; metadata: Record<string,unknown>; executionCount: number; createdAt: string }
 
-const TRIGGERS = ['FOLLOWER_MILESTONE','POST_PUBLISHED','SCHEDULED_TIME','NEW_COMMENT']
-const ACTIONS = ['NOTIFY_WEBHOOK','CREATE_POST','SEND_EMAIL','AUTO_LIKE','AUTO_COMMENT']
-const TRIGGER_LABELS: Record<string,string> = { FOLLOWER_MILESTONE: 'Follower milestone', POST_PUBLISHED: 'Post published', SCHEDULED_TIME: 'Scheduled time', NEW_COMMENT: 'New comment' }
-const ACTION_LABELS: Record<string,string> = { NOTIFY_WEBHOOK: 'Notify webhook', CREATE_POST: 'Create post', SEND_EMAIL: 'Send email', AUTO_LIKE: 'Auto-like posts', AUTO_COMMENT: 'Auto-comment on posts' }
+const TRIGGERS = ['FOLLOWER_MILESTONE','POST_PUBLISHED','SCHEDULED_TIME','NEW_COMMENT','ENGAGEMENT_MILESTONE']
+const ACTIONS = ['NOTIFY_WEBHOOK','CREATE_POST','SEND_EMAIL','AUTO_LIKE','AUTO_COMMENT','AUTO_REPOST']
+const TRIGGER_LABELS: Record<string,string> = { FOLLOWER_MILESTONE: 'Follower milestone', POST_PUBLISHED: 'Post published', SCHEDULED_TIME: 'Scheduled time', NEW_COMMENT: 'New comment', ENGAGEMENT_MILESTONE: 'Engagement milestone' }
+const ACTION_LABELS: Record<string,string> = { NOTIFY_WEBHOOK: 'Notify webhook', CREATE_POST: 'Create post', SEND_EMAIL: 'Send email', AUTO_LIKE: 'Auto-like posts', AUTO_COMMENT: 'Auto-comment on posts', AUTO_REPOST: 'Auto-repost / reshare' }
 
 export default function PlugsPage() {
   const [items, setItems] = useState<AutoAction[]>([])
   const [loading, setLoading] = useState(true)
   const [showDialog, setShowDialog] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', emailTo: '', emailSubject: '', emailBody: '', milestoneValue: '1000', isEnabled: true })
+  const [form, setForm] = useState({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', emailTo: '', emailSubject: '', emailBody: '', milestoneValue: '1000', engagementMetric: 'likes', engagementThreshold: '100', repostDelayHours: '24', isEnabled: true })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,9 +38,17 @@ export default function PlugsPage() {
     const metadata: Record<string, string> = {}
     if (form.action === 'NOTIFY_WEBHOOK') metadata.url = form.webhookUrl
     if (form.action === 'SEND_EMAIL') { metadata.to = form.emailTo; metadata.subject = form.emailSubject || 'Postiz Auto-Action'; metadata.body = form.emailBody }
-    const triggerValue = form.trigger === 'FOLLOWER_MILESTONE' ? form.milestoneValue : form.trigger === 'SCHEDULED_TIME' ? '09:00' : undefined
+    if (form.action === 'AUTO_REPOST') metadata.delayHours = form.repostDelayHours
+    if (form.trigger === 'ENGAGEMENT_MILESTONE') { metadata.metric = form.engagementMetric; metadata.threshold = form.engagementThreshold }
+    const triggerValue = form.trigger === 'FOLLOWER_MILESTONE' ? form.milestoneValue : form.trigger === 'ENGAGEMENT_MILESTONE' ? form.engagementThreshold : form.trigger === 'SCHEDULED_TIME' ? '09:00' : undefined
     await fetch('/api/auto-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, trigger: form.trigger, action: form.action, isEnabled: form.isEnabled, metadata, triggerValue }) })
     setSaving(false); setShowDialog(false); await load()
+  }
+
+  // Reset form helper
+  const openNew = () => {
+    setForm({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', emailTo: '', emailSubject: '', emailBody: '', milestoneValue: '1000', engagementMetric: 'likes', engagementThreshold: '100', repostDelayHours: '24', isEnabled: true })
+    setShowDialog(true)
   }
 
   const handleToggle = async (id: string, isEnabled: boolean) => {
@@ -57,7 +65,7 @@ export default function PlugsPage() {
     <div className="space-y-5 pb-6">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{items.length} automation{items.length !== 1 ? 's' : ''}</p>
-        <Button size="sm" className="gap-1.5 text-xs" onClick={() => { setForm({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', emailTo: '', emailSubject: '', emailBody: '', milestoneValue: '1000', isEnabled: true }); setShowDialog(true) }}>
+        <Button size="sm" className="gap-1.5 text-xs" onClick={openNew}>
           <Plus className="w-3.5 h-3.5" /> New Automation
         </Button>
       </div>
@@ -69,7 +77,7 @@ export default function PlugsPage() {
           <Zap className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
           <p className="text-sm text-muted-foreground">No automations yet</p>
           <p className="text-xs text-muted-foreground/60 mt-1">Create automated actions triggered by events</p>
-          <Button size="sm" className="mt-4 gap-1.5 text-xs" onClick={() => setShowDialog(true)}><Plus className="w-3.5 h-3.5" />New Automation</Button>
+          <Button size="sm" className="mt-4 gap-1.5 text-xs" onClick={openNew}><Plus className="w-3.5 h-3.5" />New Automation</Button>
         </Card>
       ) : (
         <div className="space-y-2">
@@ -122,6 +130,24 @@ export default function PlugsPage() {
                 <Input className="h-8 text-sm" type="number" min="1" value={form.milestoneValue} onChange={e => setForm(f => ({...f, milestoneValue: e.target.value}))} placeholder="e.g. 1000" />
               </div>
             )}
+            {form.trigger === 'ENGAGEMENT_MILESTONE' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Engagement metric</Label>
+                  <select className="w-full h-8 text-sm rounded-md border border-input bg-background px-2" value={form.engagementMetric} onChange={e => setForm(f => ({...f, engagementMetric: e.target.value}))}>
+                    <option value="likes">Likes</option>
+                    <option value="comments">Comments</option>
+                    <option value="shares">Shares / Reposts</option>
+                    <option value="impressions">Impressions</option>
+                    <option value="total">Total engagements</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Threshold (fire when ≥)</Label>
+                  <Input className="h-8 text-sm" type="number" min="1" value={form.engagementThreshold} onChange={e => setForm(f => ({...f, engagementThreshold: e.target.value}))} placeholder="e.g. 100" />
+                </div>
+              </div>
+            )}
             {form.action === 'NOTIFY_WEBHOOK' && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Webhook URL</Label>
@@ -151,6 +177,15 @@ export default function PlugsPage() {
               <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-2">
                 Requires extended OAuth write scopes on each platform. Connect channels with write access in <strong>Channels</strong> settings first.
               </p>
+            )}
+            {form.action === 'AUTO_REPOST' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Repost delay after trigger (hours)</Label>
+                  <Input className="h-8 text-sm" type="number" min="0" value={form.repostDelayHours} onChange={e => setForm(f => ({...f, repostDelayHours: e.target.value}))} placeholder="e.g. 24" />
+                </div>
+                <p className="text-[10px] text-muted-foreground">The original post will be retweeted / reshared on the same platform after the delay.</p>
+              </div>
             )}
           </div>
           <DialogFooter>

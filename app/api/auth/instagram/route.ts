@@ -46,7 +46,7 @@ export async function GET(_request: Request) {
   ).toString('base64url')
 
   const redirectUri = `${APP_URL}/api/auth/instagram/callback`
-  const scope = 'instagram_business_basic,instagram_business_content_publish,instagram_manage_comments,instagram_manage_insights'
+  const scope = 'instagram_business_basic,instagram_business_content_publish'
 
   const params = new URLSearchParams({
     client_id: appId,

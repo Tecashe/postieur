@@ -66,13 +66,23 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${APP_URL}/dashboard/channels?error=token_exchange_failed`)
   }
 
-  const shortLivedData = await tokenRes.json() as {
-    access_token: string
-    user_id: number
-    permissions?: string[]
+  // Meta docs show the response wrapped in data:[{...}] for Business Login
+  // Handle both flat and wrapped formats defensively
+  const rawToken = await tokenRes.json() as
+    | { access_token: string; user_id: number | string; permissions?: string }
+    | { data: Array<{ access_token: string; user_id: number | string; permissions?: string }> }
+
+  const tokenData = 'data' in rawToken && Array.isArray(rawToken.data)
+    ? rawToken.data[0]
+    : rawToken as { access_token: string; user_id: number | string }
+
+  if (!tokenData?.access_token) {
+    console.error('[instagram/callback] no access_token in response:', rawToken)
+    return NextResponse.redirect(`${APP_URL}/dashboard/channels?error=no_access_token`)
   }
-  const shortToken = shortLivedData.access_token
-  const rawUserId = String(shortLivedData.user_id)
+
+  const shortToken = tokenData.access_token
+  const rawUserId = String(tokenData.user_id)
 
   // ── Step 2: exchange for long-lived token (60 days) ─────────────────────
   let accessToken = shortToken
@@ -98,16 +108,18 @@ export async function GET(request: Request) {
   let followers = 0
 
   const profileRes = await fetch(
-    `${IG_GRAPH}/me?fields=id,username,followers_count,profile_picture_url&access_token=${encodeURIComponent(accessToken)}`,
+    `${IG_GRAPH}/me?fields=user_id,username,followers_count,profile_picture_url&access_token=${encodeURIComponent(accessToken)}`,
   )
   if (profileRes.ok) {
     const profile = await profileRes.json() as {
       id?: string
+      user_id?: string        // new Instagram Login API returns user_id
       username?: string
       followers_count?: number
       profile_picture_url?: string
     }
-    igUserId = profile.id ?? igUserId
+    // new API returns user_id, legacy returns id
+    igUserId = profile.user_id ?? profile.id ?? igUserId
     username = profile.username ?? username
     avatarUrl = profile.profile_picture_url
     followers = profile.followers_count ?? 0

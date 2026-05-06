@@ -584,7 +584,7 @@ export default function CanvasEditor() {
     if (!canvas) return
     canvas.discardActiveObject()
     canvas.renderAll()
-    const dataURL = canvas.toDataURL({ format: 'png', multiplier: 1 / zoom })
+    const dataURL = canvas.toDataURL({ format: 'png', multiplier: 1 })
     try {
       sessionStorage.setItem('design-export', dataURL)
       toast.success('Design exported — opening Compose…')

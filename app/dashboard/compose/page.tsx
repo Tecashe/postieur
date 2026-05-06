@@ -136,6 +136,13 @@ function ComposeInner() {
         .catch(() => {})
     }
 
+    // Handle image URL passed directly from Media Gallery ("Use in Post")
+    const mediaUrlParam = searchParams.get('mediaUrl')
+    if (mediaUrlParam) {
+      setMediaFiles(prev => [...prev, decodeURIComponent(mediaUrlParam)])
+      toast.success('Media added to post')
+    }
+
     // Handle image coming from Design Studio ("Use in Post")
     const fromDesign = searchParams.get('from') === 'design'
     if (fromDesign) {
@@ -145,9 +152,13 @@ function ComposeInner() {
         // Try to upload to media library first; fall back to inline data URL
         ;(async () => {
           try {
-            const res = await fetch(dataURL)
-            const blob = await res.blob()
-            const file = new File([blob], 'design.png', { type: 'image/png' })
+            // Decode base64 data URL directly — fetch(dataURL) can silently fail on large strings
+            const [header, b64] = dataURL.split(',')
+            const mime = header.match(/:(.*?);/)?.[1] ?? 'image/png'
+            const binary = atob(b64)
+            const bytes = new Uint8Array(binary.length)
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+            const file = new File([bytes], 'design.png', { type: mime })
             const form = new FormData()
             form.append('file', file)
             const uploadRes = await fetch('/api/media', { method: 'POST', body: form })

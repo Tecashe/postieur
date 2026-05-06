@@ -1,23 +1,27 @@
 /**
  * Instagram Business publisher
  *
- * API reference (Graph API v19):
- *   POST /{ig-user-id}/media          — create media container
- *   POST /{ig-user-id}/media_publish  — publish container
+ * Supports two API connection types:
  *
- * Required channel.config:
- *   igUserId        — Instagram Business Account numeric ID
- *   pageAccessToken — Facebook Page access token with instagram_basic + instagram_content_publish
+ *   New — Instagram Login for Business (graph.instagram.com)
+ *     channel.config.graphBaseUrl = 'https://graph.instagram.com/v21.0'
+ *     channel.config.igUserId     = Instagram Business Account numeric ID
+ *     channel.accessToken         = Instagram long-lived user token
+ *
+ *   Legacy — Facebook Login (graph.facebook.com)
+ *     channel.config.igUserId        = Instagram Business Account numeric ID
+ *     channel.config.pageAccessToken = Facebook Page access token
  */
 
 import type { PublisherPost, PublisherChannel, PostChannelConfig, PublishResult } from './types'
 
-const GRAPH = 'https://graph.facebook.com/v19.0'
+const LEGACY_GRAPH = 'https://graph.facebook.com/v19.0'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Poll container status until FINISHED or timeout (max 90 s). */
 async function waitForContainer(
+  graph: string,
   accessToken: string,
   containerId: string,
 ): Promise<boolean> {
@@ -26,7 +30,7 @@ async function waitForContainer(
     await new Promise((r) => setTimeout(r, 5_000))
     try {
       const res = await fetch(
-        `${GRAPH}/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`,
+        `${graph}/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`,
       )
       if (!res.ok) continue
       const data = (await res.json()) as { status_code?: string }
@@ -40,12 +44,13 @@ async function waitForContainer(
 }
 
 async function createContainer(
+  graph: string,
   accessToken: string,
   igUserId: string,
   params: Record<string, string>,
 ): Promise<string | null> {
   const body = new URLSearchParams({ ...params, access_token: accessToken })
-  const res = await fetch(`${GRAPH}/${igUserId}/media`, {
+  const res = await fetch(`${graph}/${igUserId}/media`, {
     method: 'POST',
     body,
   })
@@ -58,6 +63,7 @@ async function createContainer(
 }
 
 async function publishContainer(
+  graph: string,
   accessToken: string,
   igUserId: string,
   containerId: string,
@@ -66,7 +72,7 @@ async function publishContainer(
     creation_id: containerId,
     access_token: accessToken,
   })
-  const res = await fetch(`${GRAPH}/${igUserId}/media_publish`, {
+  const res = await fetch(`${graph}/${igUserId}/media_publish`, {
     method: 'POST',
     body,
   })
@@ -87,7 +93,10 @@ export async function publishToInstagram(
 ): Promise<PublishResult> {
   try {
     const igUserId = channel.config.igUserId as string | undefined
-    const pageAccessToken =
+    // New Instagram Login channels store graphBaseUrl in config.
+    // Legacy Facebook Login channels fall back to graph.facebook.com.
+    const graph = (channel.config.graphBaseUrl as string | undefined) ?? LEGACY_GRAPH
+    const token =
       (channel.config.pageAccessToken as string | undefined) ?? channel.accessToken
 
     if (!igUserId) {
@@ -121,11 +130,11 @@ export async function publishToInstagram(
           ? { media_type: 'VIDEO', video_url: url, is_carousel_item: 'true' }
           : { image_url: url, is_carousel_item: 'true' }
 
-        const containerId = await createContainer(pageAccessToken, igUserId, params)
+        const containerId = await createContainer(graph, token, igUserId, params)
         if (!containerId) continue
 
         if (isVideo(url)) {
-          const ok = await waitForContainer(pageAccessToken, containerId)
+          const ok = await waitForContainer(graph, token, containerId)
           if (!ok) continue
         }
         childIds.push(containerId)
@@ -135,7 +144,7 @@ export async function publishToInstagram(
         return { success: false, error: 'All carousel items failed to process.', retryable: true }
       }
 
-      const carouselId = await createContainer(pageAccessToken, igUserId, {
+      const carouselId = await createContainer(graph, token, igUserId, {
         media_type: 'CAROUSEL',
         children: childIds.join(','),
         caption,
@@ -144,7 +153,7 @@ export async function publishToInstagram(
         return { success: false, error: 'Failed to create carousel container.', retryable: true }
       }
 
-      const postId = await publishContainer(pageAccessToken, igUserId, carouselId)
+      const postId = await publishContainer(graph, token, igUserId, carouselId)
       return postId
         ? { success: true, externalId: postId }
         : { success: false, error: 'Failed to publish carousel.', retryable: true }
@@ -156,19 +165,19 @@ export async function publishToInstagram(
       ? { media_type: 'REELS', video_url: url, caption, share_to_feed: 'true' }
       : { image_url: url, caption }
 
-    const containerId = await createContainer(pageAccessToken, igUserId, params)
+    const containerId = await createContainer(graph, token, igUserId, params)
     if (!containerId) {
       return { success: false, error: 'Failed to create media container.', retryable: true }
     }
 
     if (isVideo(url)) {
-      const ok = await waitForContainer(pageAccessToken, containerId)
+      const ok = await waitForContainer(graph, token, containerId)
       if (!ok) {
         return { success: false, error: 'Video processing failed or timed out.', retryable: true }
       }
     }
 
-    const postId = await publishContainer(pageAccessToken, igUserId, containerId)
+    const postId = await publishContainer(graph, token, igUserId, containerId)
     return postId
       ? { success: true, externalId: postId }
       : { success: false, error: 'Failed to publish media.', retryable: true }

@@ -137,7 +137,10 @@ export default function ChannelsPage() {
   }
 
   const handlePlatformConnect = (platform: Platform) => {
-    if (CUSTOM_PLATFORMS.has(platform)) {
+    // Instagram uses the new Instagram Login for Business route
+    if (platform === 'instagram') {
+      window.location.href = '/api/auth/instagram'
+    } else if (CUSTOM_PLATFORMS.has(platform)) {
       if (platform === 'bluesky') { setBskyError(''); setBlueskyOpen(true) }
       if (platform === 'telegram') { setTgError(''); setTelegramOpen(true) }
     } else if (OAUTH_PLATFORMS.has(platform)) {

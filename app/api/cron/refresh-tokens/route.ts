@@ -10,10 +10,17 @@ function verifyCron(req: Request): boolean {
 export async function GET(req: Request) {
   if (!verifyCron(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Find channels whose tokens expire in the next hour (or have already expired)
+  // Find channels whose tokens expire in the next hour (or have already expired).
+  // Instagram/Facebook long-lived tokens have no refreshToken — they refresh via the access token itself.
   const soon = new Date(Date.now() + 60 * 60_000)
   const channels = await prisma.channel.findMany({
-    where: { refreshToken: { not: null }, tokenExpiry: { lte: soon } },
+    where: {
+      OR: [
+        { refreshToken: { not: null }, tokenExpiry: { lte: soon } },
+        // Instagram (new Login API) and Facebook: long-lived tokens refreshed via access token
+        { platform: { in: ['instagram', 'facebook'] }, tokenExpiry: { lte: soon } },
+      ],
+    },
   })
 
   const results: { channelId: string; platform: string; refreshed: boolean; error?: string }[] = []
@@ -108,18 +115,39 @@ export async function GET(req: Request) {
           }
           break
 
-        // ── Facebook / Instagram (long-lived token exchange: 60-day rolling) ──
+        // ── Facebook / Instagram ────────────────────────────────────────────
         case 'facebook':
         case 'instagram': {
-          // Facebook long-lived tokens are refreshed by re-exchanging for another long-lived token
-          if (channel.accessToken) {
+          const cfg = (channel.config ?? {}) as Record<string, unknown>
+          const isNewInstagramApi =
+            channel.platform === 'instagram' &&
+            typeof cfg.graphBaseUrl === 'string' &&
+            cfg.graphBaseUrl.includes('graph.instagram.com')
+
+          if (isNewInstagramApi && channel.accessToken) {
+            // New Instagram Login for Business — refresh long-lived token (60 days)
+            // The long-lived token itself is used as the "refresh" credential.
+            const res = await fetch(
+              `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(channel.accessToken)}`,
+            )
+            if (res.ok) {
+              const data = await res.json() as { access_token: string; expires_in?: number }
+              newToken = data.access_token
+              newExpiry = data.expires_in
+                ? new Date(Date.now() + data.expires_in * 1000)
+                : new Date(Date.now() + 60 * 24 * 60 * 60_000)
+            }
+          } else if (channel.accessToken) {
+            // Legacy Facebook Login — fb_exchange_token
             const res = await fetch(
               `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(process.env.META_APP_ID ?? '')}&client_secret=${encodeURIComponent(process.env.META_APP_SECRET ?? '')}&fb_exchange_token=${encodeURIComponent(channel.accessToken)}`,
             )
             if (res.ok) {
               const data = await res.json() as { access_token: string; expires_in?: number }
               newToken = data.access_token
-              newExpiry = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : new Date(Date.now() + 60 * 24 * 60 * 60_000)
+              newExpiry = data.expires_in
+                ? new Date(Date.now() + data.expires_in * 1000)
+                : new Date(Date.now() + 60 * 24 * 60 * 60_000)
             }
           }
           break

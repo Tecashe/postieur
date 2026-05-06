@@ -30,9 +30,11 @@ const config: Config = {
         },
       },
       borderRadius: {
-        lg: '0.5rem',
-        md: 'calc(0.5rem - 2px)',
-        sm: 'calc(0.5rem - 4px)',
+        sm:  '0.375rem',
+        md:  '0.625rem',
+        lg:  '0.875rem',
+        xl:  '1.125rem',
+        '2xl': '1.5rem',
       },
       boxShadow: {
         sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',

@@ -24,14 +24,17 @@ export async function createAutoAction(data: {
   actionType: AutoActionType
   channelIds?: string[]
   config?: Record<string, unknown>
+  isEnabled?: boolean
 }) {
   const workspaceId = await getWorkspaceId()
-  return prisma.autoAction.create({ data: { workspaceId, ...data } })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return prisma.autoAction.create({ data: { workspaceId, ...(data as any) } })
 }
 
 export async function updateAutoAction(id: string, data: Partial<{ name: string; isEnabled: boolean; triggerType: AutoActionTrigger; triggerValue: string; actionType: AutoActionType; channelIds: string[]; config: Record<string, unknown> }>) {
   const workspaceId = await getWorkspaceId()
-  return prisma.autoAction.update({ where: { id, workspaceId }, data })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return prisma.autoAction.update({ where: { id, workspaceId }, data: data as any })
 }
 
 export async function deleteAutoAction(id: string) {

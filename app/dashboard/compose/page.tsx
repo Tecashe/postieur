@@ -1,6 +1,7 @@
 ﻿'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -69,7 +70,9 @@ const AI_VARIANTS = [
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-export default function ComposePage() {
+function ComposeInner() {
+  const searchParams = useSearchParams()
+
   // ── Real DB channels ────────────────────────────────────────────────────────
   type DbChannel = {
     id: string; platform: string; handle: string; displayName: string | null
@@ -84,6 +87,44 @@ export default function ComposePage() {
       .then((data: DbChannel[]) => { setDbChannels(data); })
       .catch(() => {})
       .finally(() => setChannelsLoading(false))
+  }, [])
+
+  // ── Handle ?date=ISO and ?edit=ID URL params ──────────────────────────────
+  const [editId, setEditId] = useState<string | null>(null)
+  useEffect(() => {
+    const dateParam = searchParams.get('date')
+    const editParam = searchParams.get('edit')
+
+    if (dateParam) {
+      // Pre-fill schedule date and switch to schedule mode
+      try {
+        const d = new Date(dateParam)
+        if (!isNaN(d.getTime())) {
+          setScheduleDate(d.toISOString().slice(0, 10))
+          setScheduleMode('schedule')
+        }
+      } catch {}
+    }
+
+    if (editParam) {
+      setEditId(editParam)
+      fetch(`/api/posts/${editParam}`)
+        .then(r => r.json())
+        .then((post: { content?: string; status?: string; scheduledAt?: string | null; type?: string; labels?: string[]; mediaUrls?: string[] }) => {
+          if (post.content) setContent(post.content)
+          if (post.type) setPostType((post.type.toLowerCase() ?? 'post') as 'post' | 'thread' | 'carousel')
+          if (post.labels) setLabels(post.labels)
+          if (post.mediaUrls) setMediaFiles(post.mediaUrls)
+          if (post.scheduledAt) {
+            const d = new Date(post.scheduledAt)
+            setScheduleDate(d.toISOString().slice(0, 10))
+            setScheduleTime(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))
+            setScheduleMode('schedule')
+          }
+        })
+        .catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const [content, setContent] = useState('')
@@ -149,6 +190,27 @@ export default function ComposePage() {
 
   const handleSimulateAI = () => handleAI('variants')
 
+  // ── Labels ────────────────────────────────────────────────────────────────
+  const [labels, setLabels] = useState<string[]>([])
+  const [labelInput, setLabelInput] = useState('')
+
+  // ── Signatures ───────────────────────────────────────────────────────────────
+  type SigOption = { id: string; name: string; content: string; isDefault: boolean }
+  const [signatures, setSignatures] = useState<SigOption[]>([])
+  const [selectedSigId, setSelectedSigId] = useState<string | null>(null)
+  const [appendSig, setAppendSig] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/signatures')
+      .then(r => r.json())
+      .then((d: { signatures: SigOption[] }) => {
+        setSignatures(d.signatures ?? [])
+        const def = d.signatures?.find(s => s.isDefault)
+        if (def) { setSelectedSigId(def.id); setAppendSig(true) }
+      })
+      .catch(() => {})
+  }, [])
+
   const [isSaving, setIsSaving] = useState(false)
   const [imageGenPrompt, setImageGenPrompt] = useState('')
   const [imageGenLoading, setImageGenLoading] = useState(false)
@@ -156,7 +218,7 @@ export default function ComposePage() {
 
   // Per-platform settings (stored in PostChannel.config)
   const [platformSettings, setPlatformSettings] = useState<Record<string, Record<string, string>>>({})
-  const [platformMeta, setPlatformMeta] = useState<Record<string, { lists?: {id:string;name:string}[]; communities?: {id:string;name:string}[]; companies?: {id:string;name:string}[]; subreddits?: {id:string;name:string}[]; playlists?: {id:string;name:string}[]; categories?: {id:string;name:string}[] }>>({})
+  const [platformMeta, setPlatformMeta] = useState<Record<string, { lists?: {id:string;name:string}[]; communities?: {id:string;name:string}[]; companies?: {id:string;name:string}[]; subreddits?: {id:string;name:string}[]; playlists?: {id:string;name:string}[]; categories?: {id:string;name:string}[]; flairs?: {id:string;name:string}[] }>>({})
 
   const fetchPlatformMeta = async (platform: string, type: string, subreddit?: string) => {
     const key = `${platform}_${type}`
@@ -204,8 +266,10 @@ export default function ComposePage() {
 
   const handleSubmit = async (mode: 'now' | 'schedule' | 'queue') => {
     if (selectedChannels.length === 0) return
-    const finalContent = postType === 'thread' ? threadPosts[0] : content
-    if (!finalContent.trim()) return
+    const rawContent = postType === 'thread' ? threadPosts[0] : content
+    if (!rawContent.trim()) return
+    const sig = appendSig && selectedSigId ? signatures.find(s => s.id === selectedSigId) : null
+    const finalContent = sig ? rawContent + '\n\n' + sig.content : rawContent
 
     setIsSaving(true)
     try {
@@ -223,7 +287,7 @@ export default function ComposePage() {
         threadPosts: postType === 'thread' ? threadPosts : [],
         crossPostDelayMinutes: parseInt(crossPostDelay) || 0,
         channelIds: selectedChannels,
-        labels: [],
+        labels,
         recycleEnabled,
         recycleIntervalDays: recycleEnabled ? recycleIntervalDays : undefined,
         platformSettings,
@@ -467,6 +531,34 @@ export default function ComposePage() {
                 <span className={cn('text-[11px] font-mono', isOverLimit ? 'text-destructive' : charPct > 0.9 ? 'text-amber-500' : 'text-muted-foreground')}>
                   {charCount}/{strictestLimit}
                 </span>
+              </div>
+
+              {/* Labels input */}
+              <div className="px-3 pb-2 pt-1.5 border-t border-border flex items-start gap-2 flex-wrap">
+                <div className="flex flex-wrap gap-1 flex-1">
+                  {labels.map(tag => (
+                    <span key={tag} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-sm bg-accent/10 text-accent border border-accent/20">
+                      {tag}
+                      <button onClick={() => setLabels(prev => prev.filter(l => l !== tag))} className="hover:text-destructive transition-colors">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    value={labelInput}
+                    onChange={e => setLabelInput(e.target.value)}
+                    onKeyDown={e => {
+                      if ((e.key === 'Enter' || e.key === ',') && labelInput.trim()) {
+                        e.preventDefault()
+                        const tag = labelInput.trim().replace(/,$/, '')
+                        if (tag && !labels.includes(tag)) setLabels(prev => [...prev, tag])
+                        setLabelInput('')
+                      }
+                    }}
+                    placeholder={labels.length === 0 ? 'Add labels… (Enter to add)' : ''}
+                    className="text-[11px] bg-transparent outline-none text-foreground placeholder:text-muted-foreground/40 min-w-[120px] h-5"
+                  />
+                </div>
               </div>
 
               {/* Image Prompt */}
@@ -993,18 +1085,35 @@ export default function ComposePage() {
             </div>
 
             {/* Signature */}
-            <div className="px-4 py-3 border-t border-border flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-foreground">Append signature</p>
-                <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-                  Add your custom sign-off
-                </p>
+            <div className="px-4 py-3 border-t border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-foreground">Append signature</p>
+                  <p className="text-[10px] text-muted-foreground truncate max-w-[160px]">Add your custom sign-off</p>
+                </div>
+                <Switch
+                  checked={appendSig}
+                  onCheckedChange={setAppendSig}
+                  className="data-[state=checked]:bg-accent"
+                  disabled={signatures.length === 0}
+                />
               </div>
-              <Switch
-                checked={enableSignature}
-                onCheckedChange={setEnableSignature}
-                className="data-[state=checked]:bg-accent"
-              />
+              {appendSig && signatures.length > 0 && (
+                <select
+                  value={selectedSigId ?? ''}
+                  onChange={e => setSelectedSigId(e.target.value || null)}
+                  className="w-full h-7 px-2 text-xs bg-input border border-border rounded-sm text-foreground outline-none"
+                >
+                  {signatures.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}{s.isDefault ? ' (default)' : ''}</option>
+                  ))}
+                </select>
+              )}
+              {signatures.length === 0 && (
+                <p className="text-[10px] text-muted-foreground">
+                  <a href="/dashboard/settings" className="text-accent hover:underline">Create a signature</a> in Settings first.
+                </p>
+              )}
             </div>
 
             {/* Recycle / Evergreen */}
@@ -1075,5 +1184,13 @@ export default function ComposePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ComposePage() {
+  return (
+    <Suspense>
+      <ComposeInner />
+    </Suspense>
   )
 }

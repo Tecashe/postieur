@@ -105,7 +105,28 @@ export async function GET(request: NextRequest) {
     }
     const trendData = Array.from(trendBuckets.entries()).map(([date, v]) => ({ date, ...v, followers: 0 }))
 
-    return NextResponse.json({ totals, platformStats, heatmap, bestTimes, trendData, hasData: analytics.length > 0 })
+    // Top performing posts
+    const topPosts = analytics
+      .sort((a, b) => {
+        const engA = (a.likes ?? 0) + (a.comments ?? 0) + (a.shares ?? 0)
+        const engB = (b.likes ?? 0) + (b.comments ?? 0) + (b.shares ?? 0)
+        return engB - engA
+      })
+      .slice(0, 10)
+      .map(a => ({
+        id: a.postId,
+        content: (a.post as { content?: string }).content ?? '',
+        platforms: a.post.channels.map(pc => pc.channel.platform),
+        publishedAt: a.post.publishedAt?.toISOString() ?? null,
+        likes: a.likes ?? 0,
+        comments: a.comments ?? 0,
+        shares: a.shares ?? 0,
+        impressions: a.impressions ?? 0,
+        reach: a.reach ?? 0,
+        engagement: (a.likes ?? 0) + (a.comments ?? 0) + (a.shares ?? 0),
+      }))
+
+    return NextResponse.json({ totals, platformStats, heatmap, bestTimes, trendData, topPosts, hasData: analytics.length > 0 })
   } catch (err) {
     console.error('[GET /api/analytics]', err)
     return NextResponse.json({ totals: null, platformStats: [], heatmap: [], bestTimes: [], trendData: [], hasData: false })

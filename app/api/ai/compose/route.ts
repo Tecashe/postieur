@@ -34,14 +34,16 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json() as {
-    action: 'improve' | 'hashtags' | 'variants' | 'thread' | 'image'
+    action: 'improve' | 'hashtags' | 'variants' | 'thread' | 'image' | 'generate'
     content: string
     platform?: string
     tone?: string
     imagePrompt?: string
+    contentType?: string
+    brandVoice?: string
   }
 
-  const { action, content, platform = 'default', tone = 'professional', imagePrompt } = body
+  const { action, content, platform = 'default', tone = 'professional', imagePrompt, contentType = 'post', brandVoice } = body
 
   // ── Image generation (DALL-E 3) ──────────────────────────────────────────
   if (action === 'image') {
@@ -56,7 +58,7 @@ export async function POST(req: Request) {
       size: '1024x1024',
       quality: 'standard',
     })
-    const url = imgRes.data[0]?.url
+    const url = imgRes.data![0]?.url
     if (!url) return NextResponse.json({ error: 'No image returned' }, { status: 500 })
 
     // Download and store in Vercel Blob so the URL is permanent
@@ -118,6 +120,26 @@ Format as:
       maxTokens = 500
       break
 
+    case 'generate': {
+      const platformName = platform === 'default' ? 'social media' : platform
+      prompt = `You are a professional social media content writer specializing in ${platformName}.
+Create a compelling ${contentType} for ${platformName}.
+Platform guidance: ${platformGuide}
+Tone: ${tone}
+Topic/Brief: "${content}"${brandVoice ? `\nBrand Voice: ${brandVoice}` : ''}
+
+Write exactly 3 distinct variations. Format:
+1. [first variation]
+---
+2. [second variation]
+---
+3. [third variation]
+
+Each variation must be ready to post. No explanations, no meta-text, no quotes around the variation.`
+      maxTokens = 1000
+      break
+    }
+
     default:
       return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   }
@@ -145,6 +167,16 @@ Format as:
       cost: ((usage?.prompt_tokens ?? 0) * 0.00000015) + ((usage?.completion_tokens ?? 0) * 0.0000006),
     },
   }).catch(console.error)
+
+  // generate action returns parsed array of 3 variations
+  if (action === 'generate') {
+    // Parse variations separated by "---" or numbered lines "1." / "2." / "3."
+    const parts = result
+      .split(/\n---\n|\n-{3,}\n/)
+      .map((s) => s.replace(/^\s*\d+\.\s*/, '').trim())
+      .filter(Boolean)
+    return NextResponse.json({ results: parts })
+  }
 
   return NextResponse.json({ result })
 }

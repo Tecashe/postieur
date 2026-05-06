@@ -1,0 +1,10 @@
+{
+  "crons": [
+    { "path": "/api/cron/publish",        "schedule": "* * * * *"    },
+    { "path": "/api/cron/rss",            "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/recycle",        "schedule": "0 6 * * *"    },
+    { "path": "/api/cron/auto-actions",   "schedule": "* * * * *"    },
+    { "path": "/api/cron/refresh-tokens", "schedule": "0 * * * *"    },
+    { "path": "/api/cron/sync-analytics", "schedule": "0 */6 * * *"  }
+  ]
+}

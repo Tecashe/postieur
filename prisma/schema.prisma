@@ -16,6 +16,7 @@ enum PostStatus {
   PUBLISHING
   PUBLISHED
   FAILED
+  PENDING_APPROVAL
 }
 
 enum PostType {
@@ -50,6 +51,12 @@ model Workspace {
   plan        Plan     @default(FREE)
   logoUrl     String?
   description String?
+  // Approval workflow
+  requireApproval  Boolean @default(false)
+  // Display preferences
+  timezone         String  @default("UTC")
+  dateFormat       String  @default("MMM D, YYYY")
+  weekStartsOn     Int     @default(1) // 0 = Sunday, 1 = Monday
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -66,6 +73,10 @@ model Workspace {
   campaigns       Campaign[]
   inboxMessages   InboxMessage[]
   queueSlots      QueueSlot[]
+  signatures      Signature[]
+  notifPrefs      NotificationPreference[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
 
   @@map("workspaces")
 }
@@ -84,6 +95,7 @@ model Channel {
   tokenExpiry  DateTime?
   isActive     Boolean   @default(true)
   followers    Int       @default(0)
+  config       Json?     @default("{}") // platform-specific data: pageId, igUserId, personUrn, webhookUrl, did, chatId, etc.
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -116,6 +128,10 @@ model Post {
   recycleIntervalDays   Int?
   recycleNextAt         DateTime?
   recycleSourceId       String?
+  // Approval workflow
+  approvedById          String?
+  approvedAt            DateTime?
+  approvalNote          String?
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
@@ -307,6 +323,7 @@ enum AutoActionTrigger {
   FOLLOWER_MILESTONE
   SCHEDULED_TIME
   RSS_ITEM_CREATED
+  NEW_COMMENT
 }
 
 enum AutoActionType {
@@ -481,4 +498,78 @@ model QueueSlot {
   @@unique([workspaceId, dayOfWeek, hour, minute])
   @@index([workspaceId])
   @@map("queue_slots")
+}
+
+// --- Signature ---
+
+model Signature {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String?  // null = workspace-wide default
+  name        String
+  content     String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("signatures")
+}
+
+// --- NotificationPreference ---
+
+model NotificationPreference {
+  id           String  @id @default(cuid())
+  workspaceId  String
+  userId       String
+  type         String  // 'POST_PUBLISHED' | 'POST_FAILED' | 'NEW_COMMENT' | 'NEW_MENTION' | 'WEEKLY_REPORT' | 'TEAM_ACTIVITY' | 'QUEUE_EMPTY'
+  emailEnabled Boolean @default(true)
+  inAppEnabled Boolean @default(true)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId, type])
+  @@index([workspaceId, userId])
+  @@map("notification_preferences")
+}
+
+// --- Notification ---
+
+model Notification {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String   // target user
+  type        String   // POST_PUBLISHED | POST_FAILED | NEW_COMMENT | NEW_MENTION | TEAM_ACTIVITY | QUEUE_EMPTY
+  title       String
+  body        String?
+  entityId    String?  // postId, channelId, etc.
+  entityType  String?  // 'post' | 'channel' | etc.
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, isRead])
+  @@index([workspaceId, createdAt])
+  @@map("notifications")
+}
+
+// --- AuditLog ---
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  action      String   // 'post.created' | 'post.deleted' | 'member.invited' | 'channel.connected' | etc.
+  entityId    String?
+  entityType  String?
+  meta        Json?    @default("{}")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_logs")
 }

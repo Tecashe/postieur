@@ -87,6 +87,7 @@ type ApiResponse = {
   heatmap: Array<{ dayOfWeek: number; hour: number; value: number }>
   bestTimes: Array<{ dayOfWeek: number; hour: number; value: number; day: string }>
   trendData: Array<{ date: string; impressions: number; engagement: number; followers: number }>
+  topPosts: Array<{ id: string; content: string; platforms: string[]; publishedAt: string | null; likes: number; comments: number; shares: number; impressions: number; reach: number; engagement: number }>
   hasData: boolean
 }
 
@@ -111,6 +112,7 @@ export default function AnalyticsPage() {
   const heatmap = data?.heatmap ?? []
   const bestTimes = data?.bestTimes ?? []
   const totals = data?.totals
+  const topPosts = data?.topPosts ?? []
 
   const pieData = platformStats.length > 0
     ? platformStats.map((s, i) => ({ name: PLATFORMS[s.platform as keyof typeof PLATFORMS]?.name ?? s.platform, value: s.engagement, color: PIE_COLORS[i % PIE_COLORS.length] }))
@@ -326,6 +328,64 @@ export default function AnalyticsPage() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      {/* Top performing posts */}
+      <Card className="bg-card border-border shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-border">
+          <h2 className="text-sm font-medium text-foreground">Top Performing Posts</h2>
+        </div>
+        {topPosts.length === 0 ? (
+          <div className="px-5 py-8 text-center text-xs text-muted-foreground">
+            No posts with analytics data in this period.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-left px-5 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Content</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Impr.</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Likes</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Comments</th>
+                  <th className="text-right px-3 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Shares</th>
+                  <th className="text-right px-5 py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Engagement</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {topPosts.map((post, i) => {
+                  const firstPlatKey = post.platforms[0] as keyof typeof PLATFORMS
+                  const Icon = PLATFORMS[firstPlatKey]?.icon
+                  return (
+                    <tr key={post.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-5 py-3 max-w-xs">
+                        <div className="flex items-start gap-2">
+                          <span className="text-[10px] font-medium text-muted-foreground w-4 flex-shrink-0 mt-0.5">#{i + 1}</span>
+                          {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-foreground line-clamp-2 leading-snug">{post.content}</p>
+                            {post.publishedAt && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {new Date(post.publishedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-muted-foreground whitespace-nowrap">{post.impressions.toLocaleString()}</td>
+                      <td className="px-3 py-3 text-right font-mono text-muted-foreground">{post.likes.toLocaleString()}</td>
+                      <td className="px-3 py-3 text-right font-mono text-muted-foreground">{post.comments.toLocaleString()}</td>
+                      <td className="px-3 py-3 text-right font-mono text-muted-foreground">{post.shares.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right">
+                        <span className="font-semibold text-foreground">{post.engagement.toLocaleString()}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   )

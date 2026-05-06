@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { fireWebhooks } from '@/lib/webhook-delivery'
+import { publish } from '@/lib/publishers'
+import type { PublisherPost, PublisherChannel, PostChannelConfig } from '@/lib/publishers'
 
 // Vercel Cron: runs every minute — protected by CRON_SECRET env var
 export async function GET(request: NextRequest) {
@@ -31,60 +33,124 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ processed: 0, message: 'No posts due' })
     }
 
-    const results: Array<{ id: string; status: 'PUBLISHED' | 'FAILED'; error?: string }> = []
+    const results: Array<{
+      id: string
+      status: 'PUBLISHED' | 'FAILED' | 'PARTIAL'
+      channelResults: Array<{ channelId: string; platform: string; success: boolean; error?: string; externalId?: string }>
+    }> = []
 
     for (const post of duePosts) {
-      // Mark as PUBLISHING first (idempotent guard)
+      // Mark as PUBLISHING (idempotent guard against double-fire)
       await prisma.post.update({
         where: { id: post.id },
         data: { status: 'PUBLISHING' },
       })
 
-      try {
-        // TODO: Call real platform APIs here (Twitter/X, LinkedIn, Instagram, etc.)
-        // For each channel attached to the post, call the respective OAuth API.
-        // For now we mark as PUBLISHED and record publishedAt.
-        // Real implementation would look like:
-        //   const token = post.channels[0]?.channel.accessToken
-        //   await publishToTwitter(token, post.content)
-
-        await prisma.post.update({
-          where: { id: post.id },
-          data: {
-            status: 'PUBLISHED',
-            publishedAt: now,
-          },
-        })
-
-        // Create stub analytics record so the analytics page has something to aggregate
-        await prisma.postAnalytics.upsert({
-          where: { postId: post.id },
-          create: {
-            postId: post.id,
-            likes: 0, comments: 0, shares: 0, impressions: 0, clicks: 0, saves: 0, reach: 0,
-          },
-          update: {},
-        })
-
-        await fireWebhooks(post.workspaceId, 'post.published', { postId: post.id, publishedAt: now.toISOString() }).catch(() => {})
-        results.push({ id: post.id, status: 'PUBLISHED' })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error'
-        await prisma.post.update({
-          where: { id: post.id },
-          data: { status: 'FAILED' },
-        })
-        await fireWebhooks(post.workspaceId, 'post.failed', { postId: post.id, error: message }).catch(() => {})
-        results.push({ id: post.id, status: 'FAILED', error: message })
+      const publisherPost: PublisherPost = {
+        id: post.id,
+        content: post.content,
+        type: post.type,
+        mediaUrls: post.mediaUrls,
+        threadPosts: post.threadPosts.length > 1 ? post.threadPosts : [post.content],
       }
+
+      const channelResults: Array<{
+        channelId: string
+        platform: string
+        success: boolean
+        error?: string
+        externalId?: string
+      }> = []
+
+      for (const postChannel of post.channels) {
+        const ch = postChannel.channel
+
+        // Skip channels with no access token
+        if (!ch.accessToken) {
+          await prisma.postChannel.update({
+            where: { id: postChannel.id },
+            data: { status: 'FAILED', failReason: 'Channel has no access token. Reconnect it.' },
+          })
+          channelResults.push({ channelId: ch.id, platform: ch.platform, success: false, error: 'No access token' })
+          continue
+        }
+
+        const publisherChannel: PublisherChannel = {
+          id: ch.id,
+          platform: ch.platform,
+          accessToken: ch.accessToken,
+          refreshToken: ch.refreshToken ?? null,
+          tokenExpiry: ch.tokenExpiry ?? null,
+          handle: ch.handle,
+          displayName: ch.displayName ?? null,
+          config: (ch.config ?? {}) as Record<string, unknown>,
+        }
+
+        const channelConfig = (postChannel.config ?? {}) as PostChannelConfig
+
+        const result = await publish(publisherPost, publisherChannel, channelConfig)
+
+        // Update PostChannel record with per-channel result
+        await prisma.postChannel.update({
+          where: { id: postChannel.id },
+          data: {
+            status: result.success ? 'PUBLISHED' : 'FAILED',
+            platformPostId: result.externalId ?? null,
+            publishedAt: result.success ? now : null,
+            failReason: result.error ?? null,
+          },
+        })
+
+        channelResults.push({
+          channelId: ch.id,
+          platform: ch.platform,
+          success: result.success,
+          error: result.error,
+          externalId: result.externalId,
+        })
+      }
+
+      const anySuccess = channelResults.some((r) => r.success)
+      const allFailed = channelResults.length > 0 && channelResults.every((r) => !r.success)
+      const postStatus = allFailed ? 'FAILED' : 'PUBLISHED'
+
+      await prisma.post.update({
+        where: { id: post.id },
+        data: { status: postStatus, publishedAt: anySuccess ? now : null },
+      })
+
+      // Upsert analytics stub so the analytics page has something to aggregate
+      await prisma.postAnalytics.upsert({
+        where: { postId: post.id },
+        create: {
+          postId: post.id,
+          likes: 0, comments: 0, shares: 0, impressions: 0, clicks: 0, saves: 0, reach: 0,
+        },
+        update: {},
+      })
+
+      const webhookEvent = anySuccess ? 'post.published' : 'post.failed'
+      await fireWebhooks(post.workspaceId, webhookEvent, {
+        postId: post.id,
+        status: postStatus,
+        publishedAt: now.toISOString(),
+        channelResults,
+      }).catch(() => {})
+
+      results.push({
+        id: post.id,
+        status: allFailed ? 'FAILED' : anySuccess && channelResults.some((r) => !r.success) ? 'PARTIAL' : 'PUBLISHED',
+        channelResults,
+      })
     }
 
-    const published = results.filter(r => r.status === 'PUBLISHED').length
-    const failed = results.filter(r => r.status === 'FAILED').length
+    const published = results.filter((r) => r.status === 'PUBLISHED').length
+    const partial = results.filter((r) => r.status === 'PARTIAL').length
+    const failed = results.filter((r) => r.status === 'FAILED').length
 
-    console.log(`[cron/publish] Processed ${duePosts.length}: ${published} published, ${failed} failed`)
+    console.log(`[cron/publish] Processed ${duePosts.length}: ${published} published, ${partial} partial, ${failed} failed`)
 
-    return NextResponse.json({ processed: duePosts.length, published, failed, results })
+    return NextResponse.json({ processed: duePosts.length, published, partial, failed, results })
   } catch (err) {
     console.error('[cron/publish] Fatal error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

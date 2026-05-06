@@ -12,18 +12,24 @@ import { Rss, Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Clock } from 'luci
 import { cn } from '@/lib/utils'
 
 interface RssFeed { id: string; name: string; url: string; isEnabled: boolean; checkIntervalHours: number; autoPublishChannelIds: string[]; lastFetchedAt: string | null; lastError: string | null; postsCreated: number; createdAt: string }
+interface Channel { id: string; platform: string; handle: string; displayName: string | null }
 
 export default function RssPage() {
   const [feeds, setFeeds] = useState<RssFeed[]>([])
+  const [channels, setChannels] = useState<Channel[]>([])
   const [loading, setLoading] = useState(true)
   const [showDialog, setShowDialog] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', url: '', checkIntervalHours: 6, isEnabled: true })
+  const [form, setForm] = useState({ name: '', url: '', checkIntervalHours: 6, isEnabled: true, autoPublishChannelIds: [] as string[] })
 
   const load = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/rss').then(r => r.json())
+    const [r, ch] = await Promise.all([
+      fetch('/api/rss').then(r => r.json()),
+      fetch('/api/channels').then(r => r.json()),
+    ])
     setFeeds(r.feeds ?? [])
+    setChannels(Array.isArray(ch) ? ch : [])
     setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
@@ -49,7 +55,7 @@ export default function RssPage() {
     <div className="space-y-5 pb-6">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{feeds.length} feed{feeds.length !== 1 ? 's' : ''}</p>
-        <Button size="sm" className="gap-1.5 text-xs" onClick={() => { setForm({ name: '', url: '', checkIntervalHours: 6, isEnabled: true }); setShowDialog(true) }}>
+        <Button size="sm" className="gap-1.5 text-xs" onClick={() => { setForm({ name: '', url: '', checkIntervalHours: 6, isEnabled: true, autoPublishChannelIds: [] }); setShowDialog(true) }}>
           <Plus className="w-3.5 h-3.5" /> Add Feed
         </Button>
       </div>
@@ -87,6 +93,11 @@ export default function RssPage() {
                   <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Every {f.checkIntervalHours}h</span>
                     <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-500" /> {f.postsCreated} posts created</span>
+                    {f.autoPublishChannelIds.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        → {f.autoPublishChannelIds.length} channel{f.autoPublishChannelIds.length !== 1 ? 's' : ''} (auto-scheduled)
+                      </span>
+                    )}
                     {f.lastFetchedAt && <span>Last: {new Date(f.lastFetchedAt).toLocaleString()}</span>}
                     {f.lastError && <span className="text-destructive flex items-center gap-1"><XCircle className="w-3 h-3" />{f.lastError.slice(0, 60)}</span>}
                   </div>
@@ -120,6 +131,31 @@ export default function RssPage() {
               <select className="w-full h-8 text-sm rounded-md border border-input bg-background px-2" value={form.checkIntervalHours} onChange={e => setForm(f => ({ ...f, checkIntervalHours: Number(e.target.value) }))}>
                 {[1, 2, 4, 6, 12, 24].map(h => <option key={h} value={h}>Every {h} hour{h !== 1 ? 's' : ''}</option>)}
               </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Auto-post to channels (optional)</Label>
+              <p className="text-[10px] text-muted-foreground">Select channels to schedule RSS items automatically. Leave empty to save as drafts.</p>
+              <div className="space-y-1 max-h-32 overflow-y-auto border border-input rounded-md p-2">
+                {channels.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">No channels connected</p>
+                ) : channels.map(ch => (
+                  <label key={ch.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/30 px-1 py-0.5 rounded">
+                    <input
+                      type="checkbox"
+                      checked={form.autoPublishChannelIds.includes(ch.id)}
+                      onChange={e => setForm(f => ({
+                        ...f,
+                        autoPublishChannelIds: e.target.checked
+                          ? [...f.autoPublishChannelIds, ch.id]
+                          : f.autoPublishChannelIds.filter(id => id !== ch.id),
+                      }))}
+                      className="rounded"
+                    />
+                    <span className="font-medium capitalize">{ch.platform}</span>
+                    <span className="text-muted-foreground">{ch.handle}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

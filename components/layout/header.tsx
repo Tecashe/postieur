@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { usePathname } from 'next/navigation'
+import { useEffect, useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Bell, Menu, Search, Sparkles, ArrowUpRight, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
+import { Bell, Menu, Search, Sparkles, ArrowUpRight, CheckCircle2, AlertCircle, Clock, Info } from 'lucide-react'
 import Link from 'next/link'
 
 interface HeaderProps {
@@ -40,17 +41,67 @@ const BREADCRUMBS: Record<string, { title: string; description: string }> = {
   '/dashboard/api':       { title: 'API & Webhooks', description: 'Integrate and automate' },
 }
 
-const NOTIFICATIONS = [
-  { id: '1', type: 'success', title: 'Post published to Instagram',     time: '2 min ago',  icon: CheckCircle2 },
-  { id: '2', type: 'warning', title: 'Facebook token expiring in 3 days', time: '1 hr ago', icon: AlertCircle },
-  { id: '3', type: 'info',    title: '5 posts scheduled for tomorrow',   time: '3 hrs ago',  icon: Clock },
-  { id: '4', type: 'success', title: 'LinkedIn post reached 1K impressions', time: '5 hrs ago', icon: CheckCircle2 },
-]
+type DbNotification = {
+  id: string
+  type: string
+  title: string
+  body: string | null
+  isRead: boolean
+  createdAt: string
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+function notifIcon(type: string) {
+  if (type === 'POST_PUBLISHED') return <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-500" />
+  if (type === 'POST_FAILED') return <AlertCircle className="w-4 h-4 flex-shrink-0 text-destructive" />
+  if (type === 'QUEUE_EMPTY') return <Clock className="w-4 h-4 flex-shrink-0 text-amber-500" />
+  return <Info className="w-4 h-4 flex-shrink-0 text-accent" />
+}
 
 export function Header({ onSidebarToggle }: HeaderProps) {
   const pathname = usePathname()
   const page = BREADCRUMBS[pathname] ?? { title: 'Dashboard', description: 'Manage your social presence' }
-  const unreadCount = NOTIFICATIONS.length
+
+  const [notifications, setNotifications] = useState<DbNotification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [open, setOpen] = useState(false)
+
+  const fetchNotifications = useCallback(() => {
+    fetch('/api/notifications?limit=8')
+      .then(r => r.json())
+      .then((d: { notifications: DbNotification[]; unreadCount: number }) => {
+        setNotifications(d.notifications ?? [])
+        setUnreadCount(d.unreadCount ?? 0)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchNotifications()
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchNotifications, 60000)
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  const handleOpenChange = async (isOpen: boolean) => {
+    setOpen(isOpen)
+    if (!isOpen && unreadCount > 0) {
+      // Mark all read when closing
+      await fetch('/api/notifications', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        .catch(() => {})
+      setUnreadCount(0)
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+    }
+  }
 
   return (
     <header className="h-14 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
@@ -91,7 +142,7 @@ export function Header({ onSidebarToggle }: HeaderProps) {
           </Button>
 
           {/* Notifications */}
-          <DropdownMenu>
+          <DropdownMenu open={open} onOpenChange={handleOpenChange}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 relative text-muted-foreground hover:text-foreground">
                 <Bell className="w-4 h-4" />
@@ -103,23 +154,25 @@ export function Header({ onSidebarToggle }: HeaderProps) {
             <DropdownMenuContent align="end" className="w-80">
               <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
                 <span className="text-sm font-medium text-foreground">Notifications</span>
-                <Badge className="bg-accent/15 text-accent border-0 text-[10px] px-1.5 py-0 h-4">{unreadCount} new</Badge>
+                {unreadCount > 0 && (
+                  <Badge className="bg-accent/15 text-accent border-0 text-[10px] px-1.5 py-0 h-4">{unreadCount} new</Badge>
+                )}
               </div>
-              {NOTIFICATIONS.map(n => (
-                <DropdownMenuItem key={n.id} className="px-3 py-2.5 gap-3 cursor-pointer">
-                  <n.icon className={cn('w-4 h-4 flex-shrink-0',
-                    n.type === 'success' ? 'text-emerald-500' :
-                    n.type === 'warning' ? 'text-amber-500' : 'text-accent'
-                  )} />
+              {notifications.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-muted-foreground">No notifications yet</div>
+              ) : notifications.map(n => (
+                <DropdownMenuItem key={n.id} className={cn('px-3 py-2.5 gap-3 cursor-pointer', !n.isRead && 'bg-accent/5')}>
+                  {notifIcon(n.type)}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-normal text-foreground leading-snug">{n.title}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{n.time}</p>
+                    {n.body && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{n.body}</p>}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(n.createdAt)}</p>
                   </div>
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="justify-center text-xs text-accent">
-                View all notifications
+              <DropdownMenuItem asChild className="justify-center text-xs text-accent">
+                <Link href="/dashboard/settings">View all settings</Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -135,3 +188,4 @@ export function Header({ onSidebarToggle }: HeaderProps) {
     </header>
   )
 }
+

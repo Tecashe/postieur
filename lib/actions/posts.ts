@@ -8,19 +8,18 @@ import { z } from 'zod'
 // ── Helper: resolve workspace from Clerk org ──────────────────────────────────
 
 async function requireWorkspace() {
-  const { userId, orgId } = await auth()
+  const { userId, orgId, sessionClaims } = await auth()
   if (!userId) throw new Error('Unauthenticated')
   if (!orgId) throw new Error('No active organization')
 
   const workspace = await prisma.workspace.findUnique({
     where: { clerkOrgId: orgId },
   })
-  // Auto-create workspace row if org exists in Clerk but not yet in DB
-  // (happens for orgs created before the webhook was configured)
   if (!workspace) {
     throw new Error('Workspace not found. Please refresh the page.')
   }
-  return { userId, workspace }
+  const role = (sessionClaims?.['org_role'] as string | undefined) ?? 'org:member'
+  return { userId, workspace, role }
 }
 
 // ── Create Post ───────────────────────────────────────────────────────────────
@@ -43,15 +42,35 @@ const CreatePostSchema = z.object({
 export type CreatePostInput = z.infer<typeof CreatePostSchema>
 
 export async function createPost(input: CreatePostInput) {
-  const { userId, workspace } = await requireWorkspace()
+  const { userId, workspace, role } = await requireWorkspace()
   const data = CreatePostSchema.parse(input)
+
+  // Approval gate: if workspace requires approval AND the user is a content editor,
+  // override status to PENDING_APPROVAL instead of SCHEDULED
+  let effectiveStatus = data.status
+  if (
+    workspace.requireApproval &&
+    role === 'org:content_editor' &&
+    data.status === 'SCHEDULED'
+  ) {
+    effectiveStatus = 'PENDING_APPROVAL' as typeof data.status
+  }
+
+  // Fetch channel platforms so we can key platformSettings correctly (keyed by platform name)
+  const channelRows = data.channelIds.length > 0
+    ? await prisma.channel.findMany({
+        where: { id: { in: data.channelIds }, workspaceId: workspace.id },
+        select: { id: true, platform: true },
+      })
+    : []
+  const channelPlatformMap = Object.fromEntries(channelRows.map(c => [c.id, c.platform]))
 
   const post = await prisma.post.create({
     data: {
       workspaceId: workspace.id,
       content: data.content,
       type: data.type,
-      status: data.status,
+      status: effectiveStatus,
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
       mediaUrls: data.mediaUrls,
       threadPosts: data.threadPosts,
@@ -66,11 +85,9 @@ export async function createPost(input: CreatePostInput) {
       channels: data.channelIds.length > 0 ? {
         create: data.channelIds.map(channelId => ({
           channelId,
-          status: data.status === 'SCHEDULED' ? 'SCHEDULED' : 'DRAFT',
-          config: data.platformSettings[
-            // find the platform for this channelId — stored as JSON per-platform key
-            channelId
-          ] ?? {},
+          // PostChannel status mirrors post status for the channel link
+          status: effectiveStatus === 'SCHEDULED' ? 'SCHEDULED' : 'DRAFT',
+          config: data.platformSettings[channelPlatformMap[channelId] ?? ''] ?? {},
         })),
       } : undefined,
     },
@@ -80,7 +97,9 @@ export async function createPost(input: CreatePostInput) {
   revalidatePath('/dashboard/calendar')
   revalidatePath('/dashboard/queue')
   revalidatePath('/dashboard')
-  return { success: true, post }
+
+  // If pending approval, let the caller know so compose can show the right toast
+  return { success: true, post, pendingApproval: effectiveStatus === ('PENDING_APPROVAL' as string) }
 }
 
 // ── Get Posts ─────────────────────────────────────────────────────────────────
@@ -189,7 +208,10 @@ export async function reschedulePost(postId: string, newDate: Date) {
 export async function getDashboardStats() {
   const { workspace } = await requireWorkspace()
 
-  const [totalPosts, scheduled, published, failed, scheduledPosts, channels] = await Promise.all([
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+  const [totalPosts, scheduled, published, failed, scheduledPosts, channels, recentAnalytics, recentPublished] = await Promise.all([
     prisma.post.count({ where: { workspaceId: workspace.id } }),
     prisma.post.count({ where: { workspaceId: workspace.id, status: 'SCHEDULED' } }),
     prisma.post.count({ where: { workspaceId: workspace.id, status: 'PUBLISHED' } }),
@@ -205,7 +227,52 @@ export async function getDashboardStats() {
       orderBy: { createdAt: 'desc' },
       take: 8,
     }),
+    // Analytics for last 30 days
+    prisma.postAnalytics.findMany({
+      where: { post: { workspaceId: workspace.id, publishedAt: { gte: thirtyDaysAgo } } },
+      include: { post: { select: { publishedAt: true } } },
+    }),
+    // Recent published posts for activity feed
+    prisma.post.findMany({
+      where: { workspaceId: workspace.id, status: 'PUBLISHED' },
+      include: { channels: { include: { channel: true } } },
+      orderBy: { publishedAt: 'desc' },
+      take: 5,
+    }),
   ])
 
-  return { totalPosts, scheduled, published, failed, scheduledPosts, channels }
+  // 7-day trend buckets (Mon–Sun labels)
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const weekBuckets = new Map<string, { eng: number; reach: number }>()
+  // Initialise past 7 days
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+    weekBuckets.set(dayNames[d.getDay()], { eng: 0, reach: 0 })
+  }
+  for (const a of recentAnalytics) {
+    if (!a.post.publishedAt) continue
+    const diff = Date.now() - new Date(a.post.publishedAt).getTime()
+    if (diff > 7 * 24 * 60 * 60 * 1000) continue
+    const key = dayNames[new Date(a.post.publishedAt).getDay()]
+    const existing = weekBuckets.get(key) ?? { eng: 0, reach: 0 }
+    weekBuckets.set(key, {
+      eng: existing.eng + (a.likes ?? 0) + (a.comments ?? 0) + (a.shares ?? 0),
+      reach: existing.reach + (a.reach ?? 0),
+    })
+  }
+  const weekData = Array.from(weekBuckets.entries()).map(([day, v]) => ({ day, ...v }))
+
+  // 30-day totals
+  const totalReach = recentAnalytics.reduce((sum, a) => sum + (a.reach ?? 0), 0)
+  const totalEngagement = recentAnalytics.reduce((sum, a) => sum + (a.likes ?? 0) + (a.comments ?? 0) + (a.shares ?? 0), 0)
+
+  // Activity feed
+  const activity = recentPublished.map(p => ({
+    id: p.id,
+    content: p.content,
+    platform: p.channels[0]?.channel.platform ?? 'x',
+    publishedAt: p.publishedAt?.toISOString() ?? p.createdAt.toISOString(),
+  }))
+
+  return { totalPosts, scheduled, published, failed, scheduledPosts, channels, weekData, totalReach, totalEngagement, activity }
 }

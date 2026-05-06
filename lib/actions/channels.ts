@@ -21,8 +21,20 @@ async function requireWorkspace() {
 export async function getChannels() {
   const { workspace } = await requireWorkspace()
   return prisma.channel.findMany({
-    where: { workspaceId: workspace.id, isActive: true },
+    where: { workspaceId: workspace.id },
     orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      platform: true,
+      handle: true,
+      displayName: true,
+      avatarUrl: true,
+      isActive: true,
+      followers: true,
+      tokenExpiry: true,
+      createdAt: true,
+      // accessToken and refreshToken intentionally excluded — never send tokens to client
+    },
   })
 }
 

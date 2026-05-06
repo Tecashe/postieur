@@ -4,28 +4,16 @@ import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ActivityTable } from '@/components/dashboard/activity-table'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, Clock, CheckCircle2, Plus,
-  ArrowRight, Flame, BarChart3, Eye, Heart,
+  ArrowRight, BarChart3, Eye, Heart,
 } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { MOCK_ACTIVITY } from '@/lib/mock-data'
 import { PLATFORMS } from '@/lib/constants'
-
-const WEEK_DATA = [
-  { day: 'Mon', eng: 240, reach: 4200 },
-  { day: 'Tue', eng: 320, reach: 5100 },
-  { day: 'Wed', eng: 280, reach: 6800 },
-  { day: 'Thu', eng: 180, reach: 3900 },
-  { day: 'Fri', eng: 420, reach: 8200 },
-  { day: 'Sat', eng: 350, reach: 7100 },
-  { day: 'Sun', eng: 280, reach: 5600 },
-]
 
 function StatCard({ label, value, change, trend, icon: Icon, accent }: {
   label: string; value: string | number; change: string; trend: 'up' | 'down' | 'flat'
@@ -58,19 +46,26 @@ export default function DashboardPage() {
   const [chartView, setChartView] = useState<'eng' | 'reach'>('eng')
   type StatsData = {
     totalPosts: number; scheduled: number; published: number; failed: number
+    weekData: Array<{ day: string; eng: number; reach: number }>
+    totalReach: number; totalEngagement: number
     scheduledPosts: Array<{ id: string; content: string; scheduledAt: string | null; channels: Array<{ channel: { platform: string } }> }>
-    channels: Array<{ id: string; platform: string; handle: string; followersCount: number; isActive: boolean }>
+    channels: Array<{ id: string; platform: string; handle: string; followers: number; isActive: boolean }>
+    activity: Array<{ id: string; content: string; platform: string; publishedAt: string }>
   }
   const [stats, setStats] = useState<StatsData>({
     totalPosts: 0, scheduled: 0, published: 0, failed: 0,
-    scheduledPosts: [], channels: [],
+    weekData: [], totalReach: 0, totalEngagement: 0,
+    scheduledPosts: [], channels: [], activity: [],
   })
+  const [loading, setLoading] = useState(true)
   useEffect(() => {
-    fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {})
+    fetch('/api/stats').then(r => r.json()).then((d: StatsData) => { setStats(d); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
-  const { scheduled, published, scheduledPosts, channels } = stats
+  const { scheduled, published, scheduledPosts, channels, weekData, totalReach, totalEngagement, activity } = stats
   const liveChannelCount = channels.length
+
+  const fmtNumber = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString()
 
   return (
     <div className="space-y-5 pb-6">
@@ -91,10 +86,18 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total Reach" value="124.8K" change="+18% this week" trend="up" icon={Eye} accent />
-        <StatCard label="Engagement" value="8,421" change="+23% this week" trend="up" icon={Heart} />
-        <StatCard label="Scheduled" value={scheduled} change="upcoming posts" trend="flat" icon={Clock} />
-        <StatCard label="Published" value={published} change="Last 30 days" trend="flat" icon={CheckCircle2} />
+        <StatCard
+          label="Total Reach" icon={Eye} trend="up" accent
+          value={loading ? '—' : fmtNumber(totalReach)}
+          change="Last 30 days"
+        />
+        <StatCard
+          label="Engagement" icon={Heart} trend="up"
+          value={loading ? '—' : fmtNumber(totalEngagement)}
+          change="Last 30 days"
+        />
+        <StatCard label="Scheduled" value={loading ? '—' : scheduled} change="upcoming posts" trend="flat" icon={Clock} />
+        <StatCard label="Published" value={loading ? '—' : published} change="Total published" trend="flat" icon={CheckCircle2} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
@@ -113,15 +116,19 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="px-5 pb-5">
-              <ResponsiveContainer width="100%" height={190}>
-                <BarChart data={WEEK_DATA} barSize={18}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={35} />
-                  <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '4px', fontSize: 11 }} />
-                  <Bar dataKey={chartView} fill="oklch(0.520 0.095 178)" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <div className="h-[190px] bg-muted/20 animate-pulse rounded-sm" />
+              ) : (
+                <ResponsiveContainer width="100%" height={190}>
+                  <BarChart data={weekData.length > 0 ? weekData : []} barSize={18}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={35} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '4px', fontSize: 11 }} />
+                    <Bar dataKey={chartView} fill="oklch(0.520 0.095 178)" radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </Card>
 
@@ -132,7 +139,31 @@ export default function DashboardPage() {
                 <Link href="/dashboard/analytics">See all <ArrowRight className="w-3 h-3" /></Link>
               </Button>
             </div>
-            <ActivityTable items={MOCK_ACTIVITY.slice(0, 5)} />
+            {loading ? (
+              <div className="divide-y divide-border">
+                {[1,2,3].map(i => <div key={i} className="px-4 py-3 h-12 bg-muted/10 animate-pulse" />)}
+              </div>
+            ) : activity.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-muted-foreground">No published posts yet</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {activity.map(item => {
+                  const plat = PLATFORMS[item.platform as keyof typeof PLATFORMS]
+                  const Icon = plat?.icon
+                  return (
+                    <div key={item.id} className="px-4 py-3 flex items-start gap-3">
+                      {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-foreground line-clamp-1">{item.content}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Published · {new Date(item.publishedAt).toLocaleDateString()} at {new Date(item.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </Card>
         </div>
 
@@ -190,7 +221,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-foreground truncate">{ch.handle}</p>
-                      <p className="text-[10px] text-muted-foreground">{(ch.followersCount ?? 0).toLocaleString()} followers</p>
+                      <p className="text-[10px] text-muted-foreground">{(ch.followers ?? 0).toLocaleString()} followers</p>
                     </div>
                     <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] border-0 px-1.5 h-4">
                       active
@@ -199,22 +230,17 @@ export default function DashboardPage() {
                 )
               })}
             </div>
-          </Card>
-
-          <Card className="bg-accent/5 border-accent/20 shadow-sm p-4">
-            <div className="flex gap-3">
-              <Flame className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-medium text-foreground">Best time today</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">LinkedIn · 2:00–3:00 PM (4.2× reach)</p>
-                <Button asChild variant="ghost" size="sm" className="h-6 mt-2 text-[11px] text-accent hover:bg-accent/10 p-0 gap-1">
-                  <Link href="/dashboard/compose">Schedule now <ArrowRight className="w-3 h-3" /></Link>
+            {channels.length > 0 && (
+              <div className="px-4 py-2.5 border-t border-border">
+                <Button variant="ghost" asChild size="sm" className="w-full text-xs text-accent hover:bg-accent/5 gap-1">
+                  <Link href="/dashboard/channels">All channels <ArrowRight className="w-3 h-3" /></Link>
                 </Button>
               </div>
-            </div>
+            )}
           </Card>
         </div>
       </div>
     </div>
   )
 }
+

@@ -30,12 +30,6 @@ const CONTENT_TYPES = [
 const TONES = ['Professional', 'Casual', 'Witty', 'Inspirational', 'Educational', 'Urgency', 'Storytelling']
 const PLATFORMS_OPT = ['Instagram', 'LinkedIn', 'Twitter / X', 'TikTok', 'Facebook', 'YouTube']
 
-const SAMPLE_RESULTS = [
-  `🚀 Exciting news! After months of refinement, we're thrilled to announce our latest platform update. The wait is finally over — your social media management just got 10x more powerful. Here's what changed and why it matters for your growth strategy. 👇 #SocialMedia #Growth #ProductUpdate`,
-  `We didn't set out to build the best social tool. We set out to solve a real problem: managing multiple platforms without losing your mind. Today's update is our most significant yet. Here's the full story.`,
-  `3 things we changed that will save you hours every week:\n\n1. AI-powered scheduling now learns your audience's peak times\n2. Unified inbox so you never miss a message\n3. Cross-platform analytics in one dashboard\n\nThe best part? It all works automatically.`,
-]
-
 export default function AIStudioPage() {
   const [prompt, setPrompt] = useState('')
   const [contentType, setContentType] = useState('post')
@@ -45,13 +39,45 @@ export default function AIStudioPage() {
   const [results, setResults] = useState<string[]>([])
   const [copied, setCopied] = useState<number | null>(null)
   const [brandVoice, setBrandVoice] = useState('')
+  const [generateError, setGenerateError] = useState<string | null>(null)
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return
     setGenerating(true)
-    setTimeout(() => {
-      setResults(SAMPLE_RESULTS)
+    setResults([])
+    setGenerateError(null)
+    try {
+      const platformKey = platform
+        .toLowerCase()
+        .replace(' / ', '/')
+        .replace(/\s+/g, '')
+        .replace('twitter/x', 'x')
+      const action = contentType === 'repurpose' ? 'improve' : 'generate'
+      const res = await fetch('/api/ai/compose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          content: prompt,
+          contentType,
+          tone: tone.toLowerCase(),
+          platform: platformKey,
+          ...(brandVoice ? { brandVoice } : {}),
+        }),
+      })
+      const data = await res.json() as { results?: string[]; result?: string; error?: string }
+      if (!res.ok || data.error) throw new Error(data.error ?? 'Generation failed')
+      // Both `generate` (returns results[]) and `improve` (returns result string) handled
+      if (data.results) {
+        setResults(data.results)
+      } else if (data.result) {
+        setResults([data.result])
+      }
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
       setGenerating(false)
-    }, 1800)
+    }
   }
 
   const handleCopy = (i: number, text: string) => {
@@ -149,6 +175,13 @@ export default function AIStudioPage() {
                   {generating ? 'Generating...' : 'Generate 3 Variants'}
                 </Button>
               </Card>
+
+              {/* Error state */}
+              {generateError && (
+                <Card className="bg-destructive/10 border-destructive/30 shadow-sm p-4">
+                  <p className="text-xs text-destructive">{generateError}</p>
+                </Card>
+              )}
 
               {/* Results */}
               {results.length > 0 && (

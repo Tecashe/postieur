@@ -46,6 +46,16 @@ const PLATFORM_CONFIG: Record<string, {
     scopes: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube',
     extraParams: { access_type: 'offline', prompt: 'consent' },
   },
+  discord: {
+    authUrl: 'https://discord.com/api/oauth2/authorize',
+    clientId: process.env.DISCORD_CLIENT_ID ?? '',
+    scopes: 'webhook.incoming identify',
+  },
+  threads: {
+    authUrl: 'https://threads.net/oauth/authorize',
+    clientId: process.env.THREADS_APP_ID ?? '',
+    scopes: 'threads_basic,threads_content_publish',
+  },
 }
 
 export async function GET(

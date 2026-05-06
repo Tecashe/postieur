@@ -22,7 +22,7 @@ export default function PlugsPage() {
   const [loading, setLoading] = useState(true)
   const [showDialog, setShowDialog] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', isEnabled: true })
+  const [form, setForm] = useState({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', emailTo: '', emailSubject: '', emailBody: '', milestoneValue: '1000', isEnabled: true })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -35,8 +35,11 @@ export default function PlugsPage() {
   const handleCreate = async () => {
     if (!form.name) return
     setSaving(true)
-    const metadata = form.action === 'NOTIFY_WEBHOOK' ? { webhookUrl: form.webhookUrl } : {}
-    await fetch('/api/auto-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, trigger: form.trigger, action: form.action, isEnabled: form.isEnabled, metadata }) })
+    const metadata: Record<string, string> = {}
+    if (form.action === 'NOTIFY_WEBHOOK') metadata.url = form.webhookUrl
+    if (form.action === 'SEND_EMAIL') { metadata.to = form.emailTo; metadata.subject = form.emailSubject || 'Postiz Auto-Action'; metadata.body = form.emailBody }
+    const triggerValue = form.trigger === 'FOLLOWER_MILESTONE' ? form.milestoneValue : form.trigger === 'SCHEDULED_TIME' ? '09:00' : undefined
+    await fetch('/api/auto-actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, trigger: form.trigger, action: form.action, isEnabled: form.isEnabled, metadata, triggerValue }) })
     setSaving(false); setShowDialog(false); await load()
   }
 
@@ -54,7 +57,7 @@ export default function PlugsPage() {
     <div className="space-y-5 pb-6">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{items.length} automation{items.length !== 1 ? 's' : ''}</p>
-        <Button size="sm" className="gap-1.5 text-xs" onClick={() => { setForm({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', isEnabled: true }); setShowDialog(true) }}>
+        <Button size="sm" className="gap-1.5 text-xs" onClick={() => { setForm({ name: '', trigger: 'POST_PUBLISHED', action: 'NOTIFY_WEBHOOK', webhookUrl: '', emailTo: '', emailSubject: '', emailBody: '', milestoneValue: '1000', isEnabled: true }); setShowDialog(true) }}>
           <Plus className="w-3.5 h-3.5" /> New Automation
         </Button>
       </div>
@@ -113,10 +116,35 @@ export default function PlugsPage() {
                 {ACTIONS.map(a => <option key={a} value={a}>{ACTION_LABELS[a]}</option>)}
               </select>
             </div>
+            {form.trigger === 'FOLLOWER_MILESTONE' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Milestone follower count</Label>
+                <Input className="h-8 text-sm" type="number" min="1" value={form.milestoneValue} onChange={e => setForm(f => ({...f, milestoneValue: e.target.value}))} placeholder="e.g. 1000" />
+              </div>
+            )}
             {form.action === 'NOTIFY_WEBHOOK' && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Webhook URL</Label>
                 <Input className="h-8 text-sm" value={form.webhookUrl} onChange={e => setForm(f => ({...f, webhookUrl: e.target.value}))} placeholder="https://hooks.example.com/..." />
+              </div>
+            )}
+            {form.action === 'SEND_EMAIL' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Recipient email</Label>
+                  <Input className="h-8 text-sm" type="email" value={form.emailTo} onChange={e => setForm(f => ({...f, emailTo: e.target.value}))} placeholder="you@example.com" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Subject</Label>
+                  <Input className="h-8 text-sm" value={form.emailSubject} onChange={e => setForm(f => ({...f, emailSubject: e.target.value}))} placeholder="Postiz notification" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Body</Label>
+                  <textarea className="w-full h-20 text-sm rounded-md border border-input bg-background px-2 py-1.5 resize-none" value={form.emailBody} onChange={e => setForm(f => ({...f, emailBody: e.target.value}))} placeholder="Email body text…" />
+                </div>
+                {!process.env.NEXT_PUBLIC_RESEND_CONFIGURED && (
+                  <p className="text-[10px] text-muted-foreground">Requires <code>RESEND_API_KEY</code> env var to be configured.</p>
+                )}
               </div>
             )}
             {(form.action === 'AUTO_LIKE' || form.action === 'AUTO_COMMENT') && (

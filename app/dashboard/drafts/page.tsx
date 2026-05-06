@@ -14,7 +14,7 @@ import { toast } from 'sonner'
 
 type DbPost = {
   id: string; content: string; status: string; scheduledAt: string | null
-  createdAt: string; updatedAt: string; mediaUrls: string[]
+  createdAt: string; updatedAt: string; mediaUrls: string[]; labels: string[]
   channels: Array<{ channel: { platform: string } }>
 }
 
@@ -122,6 +122,17 @@ export default function DraftsPage() {
                 {/* Content */}
                 <p className="text-xs text-foreground line-clamp-4 flex-1 leading-relaxed">{draft.content}</p>
 
+                {/* Labels */}
+                {draft.labels?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {draft.labels.map(label => (
+                      <Badge key={label} className="text-[10px] border border-border bg-muted/50 text-muted-foreground font-normal px-1.5 h-4">
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
                 {/* Meta */}
                 <div className="flex items-center gap-2 mt-3 text-[10px] text-muted-foreground/70">
                   <span>{wordCount}w</span>
@@ -138,7 +149,7 @@ export default function DraftsPage() {
                     {draft.updatedAt ? new Date(draft.updatedAt).toLocaleDateString() : 'Unsaved'}
                   </span>
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1">
-                    <Link href={`/dashboard/compose?draft=${draft.id}`}><Edit3 className="w-3 h-3" /> Edit</Link>
+                    <Link href={`/dashboard/compose?edit=${draft.id}`}><Edit3 className="w-3 h-3" /> Edit</Link>
                   </Button>
                   <Button
                     variant="ghost" size="sm"

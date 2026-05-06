@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   Square, Circle, Type, Image as ImageIcon, Download, Trash2,
   Undo2, Redo2, AlignLeft, AlignCenter, AlignRight, Bold, Italic,
-  Minus, Plus, Palette,
+  Minus, Plus, Palette, Sparkles, RefreshCw,
 } from 'lucide-react'
 
 type FabricModule = typeof import('fabric')
@@ -33,6 +33,8 @@ export default function CanvasEditor() {
   const [strokeColor, setStrokeColor] = useState('#000000')
   const [textValue, setTextValue] = useState('Your text here')
   const [zoom, setZoom] = useState(0.5)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
 
   // Calculate scale to fit the container
   const getScale = useCallback(() => {
@@ -170,6 +172,37 @@ export default function CanvasEditor() {
     a.click()
   }
 
+  const generateAIImage = async () => {
+    if (!aiPrompt.trim() || aiGenerating) return
+    setAiGenerating(true)
+    try {
+      const res = await fetch('/api/ai/compose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'image', content: aiPrompt.trim(), imagePrompt: aiPrompt.trim() }),
+      })
+      const data = await res.json() as { url?: string; error?: string }
+      if (!data.url) throw new Error(data.error ?? 'No image URL returned')
+      const { FabricImage } = await import('fabric')
+      const canvas = fabricRef.current
+      if (!canvas) return
+      const img = await FabricImage.fromURL(data.url, { crossOrigin: 'anonymous' })
+      const scale = zoom
+      // Scale image to fill 80% of canvas width
+      const targetW = selectedSize.w * scale * 0.8
+      img.scaleToWidth(targetW)
+      img.set({ left: selectedSize.w * scale * 0.1, top: selectedSize.h * scale * 0.1 })
+      canvas.add(img)
+      canvas.setActiveObject(img)
+      canvas.renderAll()
+      setAiPrompt('')
+    } catch (err) {
+      console.error('AI image generation failed:', err)
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
   return (
     <div className="flex gap-4 h-[calc(100vh-7rem)]">
       {/* Toolbar */}
@@ -240,6 +273,34 @@ export default function CanvasEditor() {
             className="h-7 text-xs"
             placeholder="Text to add…"
           />
+        </div>
+
+        <Separator />
+
+        {/* AI Image Generation */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-1">
+            <Sparkles className="w-3 h-3" /> Generate with AI
+          </p>
+          <Input
+            value={aiPrompt}
+            onChange={e => setAiPrompt(e.target.value)}
+            className="h-7 text-xs"
+            placeholder="Describe an image…"
+            onKeyDown={e => { if (e.key === 'Enter') generateAIImage() }}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full gap-2 text-xs h-8"
+            onClick={generateAIImage}
+            disabled={!aiPrompt.trim() || aiGenerating || !ready}
+          >
+            {aiGenerating
+              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+              : <><Sparkles className="w-3.5 h-3.5" /> Generate</>
+            }
+          </Button>
         </div>
 
         <Separator />

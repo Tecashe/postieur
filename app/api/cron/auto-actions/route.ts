@@ -15,13 +15,13 @@ export async function GET(req: Request) {
   if (!verifyCron(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const now = new Date()
-  const actions = await prisma.autoAction.findMany({
+  let executed = 0
+
+  // ── SCHEDULED_TIME ──────────────────────────────────────────────────────────
+  const scheduledActions = await prisma.autoAction.findMany({
     where: { isEnabled: true, triggerType: 'SCHEDULED_TIME' },
   })
-
-  let executed = 0
-  for (const action of actions) {
-    // triggerValue is a cron-like "HH:MM" time — fire if current time matches (within 1 min window)
+  for (const action of scheduledActions) {
     if (action.triggerValue) {
       const [h, m] = action.triggerValue.split(':').map(Number)
       if (now.getUTCHours() === h && now.getUTCMinutes() === m) {
@@ -31,16 +31,60 @@ export async function GET(req: Request) {
     }
   }
 
-  // Also check POST_PUBLISHED actions — fire retroactively for posts published in the last minute
+  // ── POST_PUBLISHED ──────────────────────────────────────────────────────────
   const recentlyPublished = await prisma.post.findMany({
     where: { publishedAt: { gte: new Date(now.getTime() - 60_000), lte: now } },
     select: { id: true, workspaceId: true, content: true },
   })
   const publishActions = await prisma.autoAction.findMany({ where: { isEnabled: true, triggerType: 'POST_PUBLISHED' } })
   for (const post of recentlyPublished) {
-    const matched = publishActions.filter((a) => a.workspaceId === post.workspaceId)
-    for (const action of matched) {
+    for (const action of publishActions.filter(a => a.workspaceId === post.workspaceId)) {
       await executeAction(action, { postId: post.id, content: post.content })
+      executed++
+    }
+  }
+
+  // ── FOLLOWER_MILESTONE ──────────────────────────────────────────────────────
+  // triggerValue = milestone count as string e.g. "1000" or "10000"
+  // lastRunAt tracks when it last fired to avoid repeat firing
+  const milestoneActions = await prisma.autoAction.findMany({
+    where: { isEnabled: true, triggerType: 'FOLLOWER_MILESTONE' },
+  })
+  for (const action of milestoneActions) {
+    const milestone = Number(action.triggerValue ?? '0')
+    if (!milestone) continue
+    // Sum followers across all channels in the workspace
+    const channels = await prisma.channel.findMany({
+      where: { workspaceId: action.workspaceId, isActive: true },
+      select: { followers: true },
+    })
+    const totalFollowers = channels.reduce((sum, c) => sum + c.followers, 0)
+    if (totalFollowers >= milestone) {
+      // Only fire once: skip if lastRunAt is set and total hasn't jumped another milestone
+      const config = (action.config ?? {}) as Record<string, unknown>
+      const lastMilestoneAt = config.lastMilestoneTotal as number | undefined
+      if (!lastMilestoneAt || totalFollowers >= (lastMilestoneAt + milestone)) {
+        await executeAction(action, { totalFollowers, milestone })
+        // Record that we fired at this follower count so we don't re-fire immediately
+        await prisma.autoAction.update({
+          where: { id: action.id },
+          data: { config: { ...config, lastMilestoneTotal: totalFollowers } as never },
+        })
+        executed++
+      }
+    }
+  }
+
+  // ── NEW_COMMENT ─────────────────────────────────────────────────────────────
+  // Check InboxMessage of type COMMENT created in the last minute
+  const recentComments = await prisma.inboxMessage.findMany({
+    where: { type: 'COMMENT', createdAt: { gte: new Date(now.getTime() - 60_000) } },
+    select: { id: true, workspaceId: true, externalId: true, content: true },
+  })
+  const commentActions = await prisma.autoAction.findMany({ where: { isEnabled: true, triggerType: 'NEW_COMMENT' } })
+  for (const msg of recentComments) {
+    for (const action of commentActions.filter(a => a.workspaceId === msg.workspaceId)) {
+      await executeAction(action, { commentId: msg.id, content: msg.content })
       executed++
     }
   }

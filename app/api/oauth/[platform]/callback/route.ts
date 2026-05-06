@@ -8,6 +8,15 @@ interface TokenResponse {
   refresh_token?: string
   expires_in?: number
   token_type?: string
+  // Discord returns the webhook object directly in the token response
+  webhook?: {
+    id: string
+    url: string
+    channel_id: string
+    guild_id?: string
+    name?: string
+    token?: string
+  }
 }
 
 const TOKEN_ENDPOINTS: Record<string, string> = {
@@ -17,6 +26,8 @@ const TOKEN_ENDPOINTS: Record<string, string> = {
   instagram: 'https://graph.facebook.com/v19.0/oauth/access_token',
   reddit:    'https://www.reddit.com/api/v1/access_token',
   youtube:   'https://oauth2.googleapis.com/token',
+  discord:   'https://discord.com/api/oauth2/token',
+  threads:   'https://graph.threads.net/oauth/access_token',
 }
 
 const CLIENT_SECRETS: Record<string, { id: string; secret: string }> = {
@@ -26,10 +37,20 @@ const CLIENT_SECRETS: Record<string, { id: string; secret: string }> = {
   instagram: { id: process.env.META_APP_ID ?? '', secret: process.env.META_APP_SECRET ?? '' },
   reddit:    { id: process.env.REDDIT_CLIENT_ID ?? '', secret: process.env.REDDIT_CLIENT_SECRET ?? '' },
   youtube:   { id: process.env.YOUTUBE_CLIENT_ID ?? '', secret: process.env.YOUTUBE_CLIENT_SECRET ?? '' },
+  discord:   { id: process.env.DISCORD_CLIENT_ID ?? '', secret: process.env.DISCORD_CLIENT_SECRET ?? '' },
+  threads:   { id: process.env.THREADS_APP_ID ?? '', secret: process.env.THREADS_APP_SECRET ?? '' },
+}
+
+interface ProfileResult {
+  handle: string
+  displayName: string
+  avatarUrl?: string
+  followers?: number
+  extraConfig?: Record<string, unknown>
 }
 
 // Fetch basic profile info per platform
-async function fetchProfile(platform: string, accessToken: string): Promise<{ handle: string; displayName: string; avatarUrl?: string; followers?: number }> {
+async function fetchProfile(platform: string, accessToken: string): Promise<ProfileResult> {
   try {
     switch (platform) {
       case 'x': {
@@ -49,7 +70,74 @@ async function fetchProfile(platform: string, accessToken: string): Promise<{ ha
           headers: { Authorization: `Bearer ${accessToken}` },
         })
         const data = await res.json() as { name?: string; sub?: string; picture?: string }
-        return { handle: data.sub ?? 'linkedin-user', displayName: data.name ?? '', avatarUrl: data.picture }
+        return {
+          handle: data.sub ?? 'linkedin-user',
+          displayName: data.name ?? '',
+          avatarUrl: data.picture,
+          extraConfig: { personUrn: `urn:li:person:${data.sub ?? ''}` },
+        }
+      }
+      case 'facebook': {
+        // Fetch pages connected to the user
+        const pagesRes = await fetch(
+          `https://graph.facebook.com/v19.0/me/accounts?access_token=${encodeURIComponent(accessToken)}&fields=id,name,access_token,picture`,
+        )
+        if (!pagesRes.ok) return { handle: 'facebook-user', displayName: 'Facebook' }
+        const pagesData = await pagesRes.json() as {
+          data?: Array<{ id: string; name: string; access_token: string; picture?: { data?: { url?: string } } }>
+        }
+        const pages = pagesData.data ?? []
+        const firstPage = pages[0]
+        if (!firstPage) return { handle: 'facebook-user', displayName: 'Facebook' }
+        return {
+          handle: firstPage.name.toLowerCase().replace(/\s+/g, '-'),
+          displayName: firstPage.name,
+          avatarUrl: firstPage.picture?.data?.url,
+          extraConfig: {
+            pageId: firstPage.id,
+            pageAccessToken: firstPage.access_token,
+            pages: pages.map((p) => ({ id: p.id, name: p.name, accessToken: p.access_token })),
+          },
+        }
+      }
+      case 'instagram': {
+        // Step 1: get pages
+        const pagesRes = await fetch(
+          `https://graph.facebook.com/v19.0/me/accounts?access_token=${encodeURIComponent(accessToken)}&fields=id,name,access_token`,
+        )
+        if (!pagesRes.ok) return { handle: 'instagram-user', displayName: 'Instagram' }
+        const pagesData = await pagesRes.json() as {
+          data?: Array<{ id: string; name: string; access_token: string }>
+        }
+        const page = (pagesData.data ?? [])[0]
+        if (!page) return { handle: 'instagram-user', displayName: 'Instagram' }
+
+        // Step 2: get IG Business Account linked to the page
+        const igLinkRes = await fetch(
+          `https://graph.facebook.com/v19.0/${page.id}?fields=instagram_business_account&access_token=${encodeURIComponent(page.access_token)}`,
+        )
+        if (!igLinkRes.ok) return { handle: 'instagram-user', displayName: 'Instagram' }
+        const igLink = await igLinkRes.json() as { instagram_business_account?: { id: string } }
+        const igId = igLink.instagram_business_account?.id
+        if (!igId) return { handle: 'instagram-user', displayName: 'Instagram' }
+
+        // Step 3: get IG profile
+        const igRes = await fetch(
+          `https://graph.facebook.com/v19.0/${igId}?fields=username,followers_count,profile_picture_url&access_token=${encodeURIComponent(page.access_token)}`,
+        )
+        if (!igRes.ok) return { handle: 'instagram-user', displayName: 'Instagram' }
+        const igProfile = await igRes.json() as { username?: string; followers_count?: number; profile_picture_url?: string }
+        return {
+          handle: `@${igProfile.username ?? 'instagram-user'}`,
+          displayName: igProfile.username ?? 'Instagram',
+          avatarUrl: igProfile.profile_picture_url,
+          followers: igProfile.followers_count,
+          extraConfig: {
+            igUserId: igId,
+            pageId: page.id,
+            pageAccessToken: page.access_token,
+          },
+        }
       }
       case 'reddit': {
         const res = await fetch('https://oauth.reddit.com/api/v1/me', {
@@ -57,6 +145,41 @@ async function fetchProfile(platform: string, accessToken: string): Promise<{ ha
         })
         const data = await res.json() as { name?: string; icon_img?: string }
         return { handle: `u/${data.name ?? 'user'}`, displayName: data.name ?? '' }
+      }
+      case 'discord': {
+        // Webhook token response includes the webhook object directly
+        // We pass the raw token response as extraConfig via a separate mechanism;
+        // here we just fetch the bot user identity.
+        const res = await fetch('https://discord.com/api/v10/users/@me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (!res.ok) return { handle: 'discord-user', displayName: 'Discord' }
+        const data = await res.json() as { username?: string; global_name?: string; id?: string; avatar?: string }
+        const username = data.username ?? 'discord-user'
+        return {
+          handle: `@${username}`,
+          displayName: data.global_name ?? username,
+          avatarUrl: data.avatar ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png` : undefined,
+        }
+        // Note: webhookUrl must be set manually in Channel settings — Discord's webhook.incoming
+        // scope returns the webhook in the token response; caller must store webhook.url in config.
+      }
+      case 'threads': {
+        // Exchange short-lived token for long-lived (60 days) first
+        const llRes = await fetch(
+          `https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=${process.env.THREADS_APP_SECRET ?? ''}&access_token=${encodeURIComponent(accessToken)}`,
+        )
+        // Use short-lived token if exchange fails
+        const meToken = llRes.ok ? ((await llRes.json()) as { access_token?: string }).access_token ?? accessToken : accessToken
+        const meRes = await fetch(`https://graph.threads.net/v1.0/me?fields=id,username,threads_profile_picture_url,threads_biography&access_token=${encodeURIComponent(meToken)}`)
+        if (!meRes.ok) return { handle: 'threads-user', displayName: 'Threads' }
+        const meData = await meRes.json() as { id?: string; username?: string; threads_profile_picture_url?: string }
+        return {
+          handle: `@${meData.username ?? 'threads-user'}`,
+          displayName: meData.username ?? 'Threads',
+          avatarUrl: meData.threads_profile_picture_url,
+          extraConfig: { threadsUserId: meData.id },
+        }
       }
       default:
         return { handle: platform, displayName: platform }
@@ -158,8 +281,25 @@ export async function GET(
   const tokens = await tokenRes.json() as TokenResponse
   const { access_token, refresh_token, expires_in } = tokens
 
-  // Fetch profile
+  // Fetch profile (or construct from token response for non-profile platforms)
   const profile = await fetchProfile(platform, access_token)
+
+  // Discord: webhook URL comes from the token response body, not a profile API
+  if (platform === 'discord' && tokens.webhook?.url) {
+    const wh = tokens.webhook
+    profile.extraConfig = {
+      ...(profile.extraConfig ?? {}),
+      webhookUrl: wh.url,
+      webhookId: wh.id,
+      channelId: wh.channel_id,
+      guildId: wh.guild_id,
+    }
+    // Use the channel name as the display handle if available
+    if (wh.name) {
+      profile.displayName = wh.name
+      profile.handle = `#${wh.name.toLowerCase().replace(/\s+/g, '-')}`
+    }
+  }
 
   // Upsert channel in DB
   const tokenExpiry = expires_in
@@ -182,6 +322,8 @@ export async function GET(
       avatarUrl: profile.avatarUrl ?? null,
       followers: profile.followers ?? 0,
       isActive: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(profile.extraConfig ? { config: profile.extraConfig as any } : {}),
     },
     create: {
       workspaceId,
@@ -194,6 +336,8 @@ export async function GET(
       tokenExpiry,
       followers: profile.followers ?? 0,
       isActive: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: (profile.extraConfig ?? {}) as any,
     },
   })
 

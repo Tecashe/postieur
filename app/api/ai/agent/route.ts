@@ -63,6 +63,20 @@ const tools: OpenAI.Chat.ChatCompletionTool[] = [
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'generateImage',
+      description: 'Generate an AI image from a text prompt using DALL-E 3 and return a URL that can be attached to a post',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Detailed image generation prompt' },
+        },
+        required: ['prompt'],
+      },
+    },
+  },
 ]
 
 // Tool handlers
@@ -133,6 +147,33 @@ async function handleToolCall(
     return JSON.stringify({ totalPosts, scheduled, published, failed, period: '30 days' })
   }
 
+  if (name === 'generateImage') {
+    const { prompt } = args as { prompt: string }
+    if (!prompt?.trim()) return JSON.stringify({ error: 'Prompt is required' })
+    try {
+      const imgRes = await openai.images.generate({
+        model: 'dall-e-3',
+        prompt: prompt.trim(),
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard',
+      })
+      const url = imgRes.data![0]?.url
+      if (!url) return JSON.stringify({ error: 'No image returned from DALL-E' })
+      // Download and store permanently via Vercel Blob
+      const { put } = await import('@vercel/blob')
+      const imgResponse = await fetch(url)
+      const blob = await imgResponse.blob()
+      const stored = await put(`ai-images/${Date.now()}.png`, blob, {
+        access: 'public',
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      })
+      return JSON.stringify({ success: true, imageUrl: stored.url, message: `Image generated successfully. URL: ${stored.url}` })
+    } catch (err) {
+      return JSON.stringify({ error: err instanceof Error ? err.message : 'Image generation failed' })
+    }
+  }
+
   return JSON.stringify({ error: 'Unknown tool' })
 }
 
@@ -190,8 +231,10 @@ export async function POST(req: Request) {
     // Execute all tool calls
     for (const toolCall of msg.tool_calls) {
       let toolArgs: Record<string, unknown> = {}
-      try { toolArgs = JSON.parse(toolCall.function.arguments) } catch {}
-      const result = await handleToolCall(toolCall.function.name, toolArgs, workspace.id, userId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tc = toolCall as any
+      try { toolArgs = JSON.parse(tc.function.arguments) } catch {}
+      const result = await handleToolCall(tc.function.name, toolArgs, workspace.id, userId)
       apiMessages.push({
         role: 'tool',
         tool_call_id: toolCall.id,

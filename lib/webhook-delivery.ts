@@ -43,7 +43,8 @@ export async function fireWebhooks(
       // Record delivery
       await prisma.$transaction([
         prisma.webhookDelivery.create({
-          data: { webhookId: endpoint.id, event, payload, responseCode, status, error },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data: { webhookId: endpoint.id, event, payload: payload as any, responseCode, status, error },
         }),
         prisma.webhookEndpoint.update({
           where: { id: endpoint.id },

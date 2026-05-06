@@ -18,7 +18,17 @@ export async function GET(_request: Request) {
   }
 
   const appId = process.env.META_APP_ID
+  const appSecret = process.env.META_APP_SECRET
+
+  console.log('[instagram/oauth] env check:', {
+    META_APP_ID: appId ? `${appId.slice(0, 4)}…(${appId.length} chars)` : 'MISSING',
+    META_APP_SECRET: appSecret ? `set (${appSecret.length} chars)` : 'MISSING',
+    APP_URL,
+    NODE_ENV: process.env.NODE_ENV,
+  })
+
   if (!appId) {
+    console.error('[instagram/oauth] META_APP_ID is not set')
     return NextResponse.json({ error: 'Instagram OAuth not configured (META_APP_ID missing)' }, { status: 503 })
   }
 
@@ -36,14 +46,18 @@ export async function GET(_request: Request) {
   ).toString('base64url')
 
   const redirectUri = `${APP_URL}/api/auth/instagram/callback`
+  const scope = 'instagram_business_basic,instagram_business_content_publish,instagram_manage_comments,instagram_manage_insights'
 
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: 'instagram_business_basic,instagram_business_content_publish,instagram_manage_comments,instagram_manage_insights',
+    scope,
     state,
   })
 
-  return NextResponse.redirect(`https://www.instagram.com/oauth/authorize?${params.toString()}`)
+  const authorizeUrl = `https://www.instagram.com/oauth/authorize?${params.toString()}`
+  console.log('[instagram/oauth] redirecting to:', authorizeUrl)
+
+  return NextResponse.redirect(authorizeUrl)
 }

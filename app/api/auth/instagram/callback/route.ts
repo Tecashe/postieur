@@ -253,23 +253,23 @@ export async function GET(request: Request) {
   // Use application/x-www-form-urlencoded — more reliable than multipart/form-data
   // across Node.js runtimes. redirect_uri must be byte-for-byte identical to the
   // value used in the authorization URL.
-  // Build body once so we can log it before sending
-  const tokenBody = new URLSearchParams({
-    client_id: appId,
-    client_secret: appSecret,
-    grant_type: 'authorization_code',
-    redirect_uri: REDIRECT_URI,
-    code,
-  })
-  // Log the exact body (secret redacted) and redirect_uri as hex to catch invisible chars
-  console.log('[instagram/callback] POST body:', tokenBody.toString().replace(appSecret, '<redacted>'))
-  console.log('[instagram/callback] redirect_uri hex:', Buffer.from(REDIRECT_URI).toString('hex'))
-  console.log('[instagram/callback] POSTing to https://api.instagram.com/oauth/access_token with redirect_uri:', REDIRECT_URI)
+  // Use multipart/form-data — matches Meta's own curl documentation exactly.
+  // This sends redirect_uri as a LITERAL string (no percent-encoding), which avoids
+  // any risk of Meta doing a raw string comparison without URL-decoding first.
+  const tokenForm = new FormData()
+  tokenForm.set('client_id', appId)
+  tokenForm.set('client_secret', appSecret)
+  tokenForm.set('grant_type', 'authorization_code')
+  tokenForm.set('redirect_uri', REDIRECT_URI)
+  tokenForm.set('code', code)
 
+  console.log('[instagram/callback] POSTing multipart FormData to https://api.instagram.com/oauth/access_token')
+  console.log('[instagram/callback] redirect_uri value:', REDIRECT_URI)
+
+  // DO NOT set Content-Type manually — FormData sets it automatically with the correct boundary
   const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: tokenBody,
+    body: tokenForm,
   })
 
   const tokenResText = await tokenRes.text()

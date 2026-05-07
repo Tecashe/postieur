@@ -250,18 +250,21 @@ export async function GET(request: Request) {
   })
 
   // ── Step 1: exchange code for short-lived token ─────────────────────────
-  const tokenForm = new FormData()
-  tokenForm.append('client_id', appId)
-  tokenForm.append('client_secret', appSecret)
-  tokenForm.append('grant_type', 'authorization_code')
-  tokenForm.append('redirect_uri', REDIRECT_URI)
-  tokenForm.append('code', code)
-
+  // Use application/x-www-form-urlencoded — more reliable than multipart/form-data
+  // across Node.js runtimes. redirect_uri must be byte-for-byte identical to the
+  // value used in the authorization URL.
   console.log('[instagram/callback] POSTing to https://api.instagram.com/oauth/access_token with redirect_uri:', REDIRECT_URI)
 
   const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
     method: 'POST',
-    body: tokenForm,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      grant_type: 'authorization_code',
+      redirect_uri: REDIRECT_URI,
+      code,
+    }),
   })
 
   const tokenResText = await tokenRes.text()

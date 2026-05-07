@@ -25,9 +25,11 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and static files
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    // Skip Next.js internals, static files, and OAuth callback routes
+    // OAuth callbacks must NOT go through Clerk — session-sync redirects would
+    // cause the browser to replay the callback URL, consuming the one-time code
+    '/((?!_next|api/auth/[^/?]+/callback|[^?]*\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // API routes — exclude OAuth callbacks (already covered above, belt-and-suspenders)
+    '/(api(?!/auth/[^/]+/callback)|trpc)(.*)',
   ],
 }

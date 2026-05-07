@@ -253,18 +253,23 @@ export async function GET(request: Request) {
   // Use application/x-www-form-urlencoded — more reliable than multipart/form-data
   // across Node.js runtimes. redirect_uri must be byte-for-byte identical to the
   // value used in the authorization URL.
+  // Build body once so we can log it before sending
+  const tokenBody = new URLSearchParams({
+    client_id: appId,
+    client_secret: appSecret,
+    grant_type: 'authorization_code',
+    redirect_uri: REDIRECT_URI,
+    code,
+  })
+  // Log the exact body (secret redacted) and redirect_uri as hex to catch invisible chars
+  console.log('[instagram/callback] POST body:', tokenBody.toString().replace(appSecret, '<redacted>'))
+  console.log('[instagram/callback] redirect_uri hex:', Buffer.from(REDIRECT_URI).toString('hex'))
   console.log('[instagram/callback] POSTing to https://api.instagram.com/oauth/access_token with redirect_uri:', REDIRECT_URI)
 
   const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: appId,
-      client_secret: appSecret,
-      grant_type: 'authorization_code',
-      redirect_uri: REDIRECT_URI,
-      code,
-    }),
+    body: tokenBody,
   })
 
   const tokenResText = await tokenRes.text()

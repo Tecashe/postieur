@@ -10,6 +10,10 @@ const isPublicRoute = createRouteMatcher([
   '/accept-invitation(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/api/auth/(.*)',   // OAuth callbacks — no session exists yet when Meta redirects back
+  '/api/webhooks/(.*)',
+  '/privacy(.*)',
+  '/terms(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {

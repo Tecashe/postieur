@@ -110,7 +110,13 @@ export async function GET(_request: Request) {
     }),
   ).toString('base64url')
 
-  const scope = 'instagram_business_basic,instagram_business_content_publish'
+  // const scope = 'instagram_business_basic,instagram_business_content_publish'
+  const scope = [
+  'instagram_business_basic',
+  'instagram_business_content_publish',
+  'instagram_business_manage_messages',
+  'instagram_business_manage_comments',
+].join(',')
 
   const params = new URLSearchParams({
     client_id: appId,

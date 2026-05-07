@@ -187,7 +187,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+const APP_URL = 'https://postieur.vercel.app'
+const REDIRECT_URI = 'https://postieur.vercel.app/api/auth/instagram/callback'
 const IG_GRAPH = 'https://graph.instagram.com'
 
 /**
@@ -205,10 +206,8 @@ const IG_GRAPH = 'https://graph.instagram.com'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
 
-  // ── DEBUG: log the raw incoming URL so we can see exactly what Instagram sent ──
   console.log('[instagram/callback] raw request.url:', request.url)
   console.log('[instagram/callback] raw code param:', searchParams.get('code'))
-  console.log('[instagram/callback] raw state param:', searchParams.get('state'))
 
   // Instagram appends `#_` to the code per their docs — strip it defensively
   const rawCode = searchParams.get('code')
@@ -217,8 +216,7 @@ export async function GET(request: Request) {
   const error = searchParams.get('error')
   const errorReason = searchParams.get('error_reason')
 
-  console.log('[instagram/callback] cleaned code:', code)
-  console.log('[instagram/callback] code length:', code?.length ?? 0)
+  console.log('[instagram/callback] cleaned code length:', code?.length ?? 0)
 
   if (error) {
     const msg = errorReason ?? error
@@ -242,35 +240,24 @@ export async function GET(request: Request) {
 
   const appId = process.env.META_APP_ID ?? ''
   const appSecret = process.env.META_APP_SECRET ?? ''
-  // Strip trailing slash defensively — must be byte-for-byte identical in step 1 and step 2
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-  const redirectUri = `${baseUrl}/api/auth/instagram/callback`
 
   console.log('[instagram/callback] token exchange params:', {
     appId: appId ? `${appId.slice(0, 4)}…(${appId.length} chars)` : 'MISSING',
     appSecret: appSecret ? `set (${appSecret.length} chars)` : 'MISSING',
-    redirectUri,
+    redirectUri: REDIRECT_URI,
     codeLength: code.length,
     codePreview: `${code.slice(0, 10)}…${code.slice(-10)}`,
   })
 
   // ── Step 1: exchange code for short-lived token ─────────────────────────
-  // Meta docs use multipart/form-data (curl -F flags), not urlencoded
   const tokenForm = new FormData()
   tokenForm.append('client_id', appId)
   tokenForm.append('client_secret', appSecret)
   tokenForm.append('grant_type', 'authorization_code')
-  tokenForm.append('redirect_uri', redirectUri)
+  tokenForm.append('redirect_uri', REDIRECT_URI)
   tokenForm.append('code', code)
 
-  // Log exactly what we're sending
-  console.log('[instagram/callback] POSTing token exchange to https://api.instagram.com/oauth/access_token')
-  console.log('[instagram/callback] form fields:', {
-    client_id: appId,
-    grant_type: 'authorization_code',
-    redirect_uri: redirectUri,
-    code_length: code.length,
-  })
+  console.log('[instagram/callback] POSTing to https://api.instagram.com/oauth/access_token with redirect_uri:', REDIRECT_URI)
 
   const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
     method: 'POST',
@@ -286,8 +273,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${APP_URL}/dashboard/channels?error=token_exchange_failed`)
   }
 
-  // Meta docs show the response wrapped in data:[{...}] for Business Login
-  // Handle both flat and wrapped formats defensively
+  // Handle both flat and wrapped response formats
   const rawToken = JSON.parse(tokenResText) as
     | { access_token: string; user_id: number | string; permissions?: string }
     | { data: Array<{ access_token: string; user_id: number | string; permissions?: string }> }

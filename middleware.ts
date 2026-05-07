@@ -1,3 +1,33 @@
+// import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+// const isProtectedRoute = createRouteMatcher([
+//   '/dashboard(.*)',
+//   '/onboarding(.*)',
+// ])
+
+// // These routes must remain public — they handle their own auth state
+// const isPublicRoute = createRouteMatcher([
+//   '/accept-invitation(.*)',
+//   '/sign-in(.*)',
+//   '/sign-up(.*)',
+// ])
+
+// export default clerkMiddleware(async (auth, req) => {
+//   if (isPublicRoute(req)) return
+//   if (isProtectedRoute(req)) {
+//     await auth.protect()
+//   }
+// })
+
+// export const config = {
+//   matcher: [
+//     // Skip Next.js internals and static files
+//     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+//     // Always run for API routes
+//     '/(api|trpc)(.*)',
+//   ],
+// }
+
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isProtectedRoute = createRouteMatcher([
@@ -10,6 +40,8 @@ const isPublicRoute = createRouteMatcher([
   '/accept-invitation(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  // Instagram OAuth callback handles its own state via the `state` param
+  '/api/auth/(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {
@@ -23,7 +55,7 @@ export const config = {
   matcher: [
     // Skip Next.js internals and static files
     '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    // Always run for API routes EXCEPT OAuth callbacks
+    '/(api|trpc)((?!/auth/).*)',
   ],
 }

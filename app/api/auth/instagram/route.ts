@@ -55,15 +55,19 @@ export async function GET(_request: Request) {
     'instagram_business_manage_insights',
   ].join(',')
 
+  // Build params WITHOUT redirect_uri — URLSearchParams encodes it as https%3A%2F%2F...
+  // but Meta's embed URL sends it as a literal https://... (unencoded).
+  // If Meta stores the raw string from the auth URL and does a literal comparison
+  // during token exchange, the encoded form will never match the literal form.
   const params = new URLSearchParams({
     client_id: appId,
-    redirect_uri: REDIRECT_URI,
     response_type: 'code',
     scope,
     state,
   })
 
-  const authorizeUrl = `https://www.instagram.com/oauth/authorize?${params.toString()}`
+  // Append redirect_uri as a literal URL (no percent-encoding) to match Meta's embed URL format
+  const authorizeUrl = `https://www.instagram.com/oauth/authorize?${params.toString()}&redirect_uri=${REDIRECT_URI}`
   console.log('[instagram/oauth] redirecting to:', authorizeUrl)
 
   return NextResponse.redirect(authorizeUrl)

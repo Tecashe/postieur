@@ -5,7 +5,7 @@ const isProtectedRoute = createRouteMatcher([
   '/onboarding(.*)',
 ])
 
-// These routes must remain public — th
+// These routes must remain public — they handle their own auth state
 const isPublicRoute = createRouteMatcher([
   '/accept-invitation(.*)',
   '/sign-in(.*)',
